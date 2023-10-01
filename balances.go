@@ -23,13 +23,37 @@ type UserBalance struct {
 	Amount    float64 `json:"Amount"`
 }
 
-func createAccountWithBalance(dbSvc *dynamodb.DynamoDB, accountId string) error {
+func CheckUserExists(dbSvc *dynamodb.DynamoDB, accountId string) error {
+	// Prepare the input for the GetItem operation
+	input := &dynamodb.GetItemInput{
+		TableName: aws.String("UserBalanceTable"), // Replace with your DynamoDB table name
+		Key: map[string]*dynamodb.AttributeValue{
+			"AccountID": {
+				S: aws.String(accountId),
+			},
+		},
+	}
+	// Retrieve the item from DynamoDB
+	result, err := dbSvc.GetItem(input)
+	if err != nil {
+		return err
+	}
+
+	if result.Item == nil {
+		return errors.New("empty_user")
+	} else {
+		log.Printf("the found user is: %#v", result.Item)
+		return nil
+	}
+}
+
+func CreateAccountWithBalance(dbSvc *dynamodb.DynamoDB, accountId string, amount float64) error {
 	item := map[string]*dynamodb.AttributeValue{
 		"AccountID": {
 			S: aws.String(accountId),
 		},
 		"Amount": {
-			N: aws.String("1"),
+			N: aws.String(fmt.Sprintf("%f", amount)),
 		},
 		"CreatedAt": {
 			N: aws.String(fmt.Sprintf("%d", getCurrentTimestamp())),
