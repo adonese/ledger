@@ -25,8 +25,8 @@ func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.Client, er
 		return nil, err
 	}
 
-	client := dynamodb.NewFromConfig(cfg)
-	return client, nil
+	return dynamodb.NewFromConfig(cfg), nil
+
 }
 
 // LedgerEntry represents a single entry onto LedgerTable
@@ -40,6 +40,7 @@ type LedgerEntry struct {
 func test() {
 	// Create a new DynamoDB session
 	var _dbSvc *dynamodb.Client
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion("eu-north-1"),
 	)

@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -37,22 +36,21 @@ func TestInitializeLedger(t *testing.T) {
 		region    string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    *dynamodb.Client
-		wantErr bool
+		name string
+		args args
 	}{
-		// TODO: Add test cases.
+		{"test_initializing aws", args{accessKey: "", secretKey: "", region: "eu-north-1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := InitializeLedger(tt.args.accessKey, tt.args.secretKey, tt.args.region)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("InitializeLedger() error = %v, wantErr %v", err, tt.wantErr)
+			if err != nil {
+				t.Errorf("InitializeLedger() error = %v", err)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("InitializeLedger() = %v, want %v", got, tt.want)
+			if got == nil {
+				t.Errorf("InitializeLedger() error = ledger is nil")
+				return
 			}
 		})
 	}
