@@ -3,6 +3,7 @@ package ledger
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -20,6 +21,30 @@ type Balances struct {
 type UserBalance struct {
 	AccountID string  `json:"AccountID"`
 	Amount    float64 `json:"Amount"`
+}
+
+func createAccountWithBalance(dbSvc *dynamodb.DynamoDB, accountId string) error {
+	item := map[string]*dynamodb.AttributeValue{
+		"AccountID": {
+			S: aws.String(accountId),
+		},
+		"Amount": {
+			N: aws.String("1"),
+		},
+		"CreatedAt": {
+			N: aws.String(fmt.Sprintf("%d", getCurrentTimestamp())),
+		},
+	}
+
+	// Put the item into the DynamoDB table
+	input := &dynamodb.PutItemInput{
+		TableName: aws.String("UserBalanceTable"),
+		Item:      item,
+	}
+
+	_, err := dbSvc.PutItem(input)
+	log.Printf("the error is: %v", err)
+	return err
 }
 
 // Function to inquire about a user's balance
