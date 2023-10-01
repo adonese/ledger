@@ -34,7 +34,7 @@ func Test_transferCredits(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := transferCredits(tt.args.dbSvc, tt.args.fromAccountID, tt.args.toAccountID, tt.args.amount); (err != nil) != tt.wantErr {
+			if err := TransferCredits(tt.args.dbSvc, tt.args.fromAccountID, tt.args.toAccountID, tt.args.amount); (err != nil) != tt.wantErr {
 				t.Errorf("transferCredits() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -65,7 +65,7 @@ func Test_inquireBalance(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := inquireBalance(tt.args.dbSvc, tt.args.AccountID)
+			got, err := InquireBalance(tt.args.dbSvc, tt.args.AccountID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("inquireBalance() error = %v, wantErr %v", err, tt.wantErr)
 				return

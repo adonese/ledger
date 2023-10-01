@@ -23,7 +23,7 @@ type UserBalance struct {
 }
 
 // Function to inquire about a user's balance
-func inquireBalance(dbSvc *dynamodb.DynamoDB, AccountID string) (float64, error) {
+func InquireBalance(dbSvc *dynamodb.DynamoDB, AccountID string) (float64, error) {
 	result, err := dbSvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String("UserBalanceTable"),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -33,24 +33,21 @@ func inquireBalance(dbSvc *dynamodb.DynamoDB, AccountID string) (float64, error)
 	if err != nil {
 		return 0, fmt.Errorf("failed to inquire balance for user %s: %v", AccountID, err)
 	}
-
 	if result.Item == nil {
 		return 0, fmt.Errorf("user %s does not exist", AccountID)
 	}
-
 	userBalance := UserBalance{}
 	err = dynamodbattribute.UnmarshalMap(result.Item, &userBalance)
 	if err != nil {
 		return 0, fmt.Errorf("failed to unmarshal user balance for user %s: %v", AccountID, err)
 	}
-
 	return userBalance.Amount, nil
 }
 
 // Function to transfer credits from one user to another
-func transferCredits(dbSvc *dynamodb.DynamoDB, fromAccountID, toAccountID string, amount float64) error {
+func TransferCredits(dbSvc *dynamodb.DynamoDB, fromAccountID, toAccountID string, amount float64) error {
 	// Create a new transaction input
-	userBalance, err := inquireBalance(dbSvc, fromAccountID)
+	userBalance, err := InquireBalance(dbSvc, fromAccountID)
 	if err != nil || amount > userBalance {
 		return errors.New("insufficient balance")
 	}
