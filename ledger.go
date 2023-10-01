@@ -1,28 +1,32 @@
 package ledger
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// InitializeLedger is a helper function to auth aws
-func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.DynamoDB, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Region:      aws.String(region),
-		Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
-	})
+// InitializeLedger is a helper function to authenticate with AWS and create a DynamoDB client
+func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	dyn := dynamodb.New(sess)
-	return dyn, nil
+	client := dynamodb.NewFromConfig(cfg)
+	return client, nil
 }
 
 // LedgerEntry represents a single entry onto LedgerTable
@@ -35,29 +39,29 @@ type LedgerEntry struct {
 
 func test() {
 	// Create a new DynamoDB session
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("eu-north-1"),
-	})
+	var _dbSvc *dynamodb.Client
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion("eu-north-1"),
+	)
 	if err != nil {
 		log.Fatal("Failed to create DynamoDB session:", err)
 	}
 
-	// Create a DynamoDB client
-	dbSvc := dynamodb.New(sess)
+	_dbSvc = dynamodb.NewFromConfig(cfg)
 
 	// Perform credit and debit transactions``
-	err = RecordCredit(dbSvc, "account_id_1", 100.0)
+	err = RecordCredit(_dbSvc, "account_id_1", 100.0)
 	if err != nil {
 		log.Fatal("Failed to record credit transaction:", err)
 	}
 
-	err = RecordDebit(dbSvc, "account_id_1", 50.0)
+	err = RecordDebit(_dbSvc, "account_id_1", 50.0)
 	if err != nil {
 		log.Fatal("Failed to record debit transaction:", err)
 	}
 }
 
-func RecordCredit(db *dynamodb.DynamoDB, accountID string, amount float64) error {
+func RecordCredit(client *dynamodb.Client, accountID string, amount float64) error {
 	// Create a new ledger entry
 	entry := LedgerEntry{
 		AccountID: accountID,
@@ -66,9 +70,9 @@ func RecordCredit(db *dynamodb.DynamoDB, accountID string, amount float64) error
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
-	av, err := dynamodbattribute.MarshalMap(entry)
+	av, err := attributevalue.MarshalMap(entry)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ledger entry: %v", err)
+		return errors.New("failed to marshal ledger entry")
 	}
 
 	// Create the input for the PutItem operation
@@ -78,15 +82,15 @@ func RecordCredit(db *dynamodb.DynamoDB, accountID string, amount float64) error
 	}
 
 	// Put the ledger entry into the DynamoDB table
-	_, err = db.PutItem(input)
+	_, err = client.PutItem(context.TODO(), input)
 	if err != nil {
-		return fmt.Errorf("failed to record credit transaction: %v", err)
+		return errors.New("failed to record credit transaction")
 	}
 
 	return nil
 }
 
-func RecordDebit(db *dynamodb.DynamoDB, accountID string, amount float64) error {
+func RecordDebit(client *dynamodb.Client, accountID string, amount float64) error {
 	// Create a new ledger entry
 	entry := LedgerEntry{
 		AccountID:     accountID,
@@ -96,9 +100,9 @@ func RecordDebit(db *dynamodb.DynamoDB, accountID string, amount float64) error 
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
-	av, err := dynamodbattribute.MarshalMap(entry)
+	av, err := attributevalue.MarshalMap(entry)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ledger entry: %v", err)
+		return errors.New("failed to marshal ledger entry")
 	}
 
 	// Create the input for the PutItem operation
@@ -108,7 +112,7 @@ func RecordDebit(db *dynamodb.DynamoDB, accountID string, amount float64) error 
 	}
 
 	// Put the ledger entry into the DynamoDB table
-	_, err = db.PutItem(input)
+	_, err = client.PutItem(context.TODO(), input)
 	if err != nil {
 		return fmt.Errorf("failed to record debit transaction: %v", err)
 	}
@@ -117,17 +121,17 @@ func RecordDebit(db *dynamodb.DynamoDB, accountID string, amount float64) error 
 }
 
 // Function to store a transaction in the LedgerTable
-func storeTransaction(dbSvc *dynamodb.DynamoDB, userID, transactionType string, amount float64) error {
-	item := map[string]*dynamodb.AttributeValue{
-		"AccountID":     {S: aws.String(userID)},
-		"TransactionID": {S: aws.String("")},
-		"Amount":        {N: aws.String(fmt.Sprintf("%.2f", amount))},
-		"Type":          {S: aws.String(transactionType)},
-		"Currency":      {S: aws.String("SDG")}, // Assuming a fixed currency for transactions
-		"Timestamp":     {S: aws.String("")},
+func storeTransaction(dbSvc *dynamodb.Client, userID, transactionType string, amount float64) error {
+	item := map[string]types.AttributeValue{
+		"AccountID":     &types.AttributeValueMemberS{Value: userID},
+		"TransactionID": &types.AttributeValueMemberS{Value: ""},
+		"Amount":        &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+		"Type":          &types.AttributeValueMemberS{Value: transactionType},
+		"Currency":      &types.AttributeValueMemberS{Value: "SDG"},
+		"Timestamp":     &types.AttributeValueMemberS{Value: ""},
 	}
 
-	_, err := dbSvc.PutItem(&dynamodb.PutItemInput{
+	_, err := dbSvc.PutItem(context.TODO(), &dynamodb.PutItemInput{
 		TableName: aws.String("LedgerTable"),
 		Item:      item,
 	})

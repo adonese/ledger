@@ -1,15 +1,18 @@
 package ledger
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"slices"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 type Balances struct {
@@ -24,26 +27,25 @@ type UserBalance struct {
 	Amount    float64 `json:"Amount"`
 }
 
-func CheckUsersExist(dbSvc *dynamodb.DynamoDB, accountIds []string) ([]string, error) {
+func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, error) {
 	// Prepare the input for the BatchGetItem operation
-	keys := make([]map[string]*dynamodb.AttributeValue, len(accountIds))
+	keys := make([]map[string]types.AttributeValue, len(accountIds))
 	var err error
 	for i, accountId := range accountIds {
-		keys[i] = map[string]*dynamodb.AttributeValue{
-			"AccountID": {
-				S: aws.String(accountId),
-			},
+		keys[i] = map[string]types.AttributeValue{
+			"AccountID": &types.AttributeValueMemberS{Value: accountId},
 		}
 	}
 	input := &dynamodb.BatchGetItemInput{
-		RequestItems: map[string]*dynamodb.KeysAndAttributes{
+		RequestItems: map[string]types.KeysAndAttributes{
 			"UserBalanceTable": {
 				Keys: keys,
 			},
 		},
 	}
+
 	// Retrieve the items from DynamoDB
-	result, err := dbSvc.BatchGetItem(input)
+	result, err := dbSvc.BatchGetItem(context.TODO(), input)
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +54,12 @@ func CheckUsersExist(dbSvc *dynamodb.DynamoDB, accountIds []string) ([]string, e
 	var foundIds []string
 	for _, item := range result.Responses["UserBalanceTable"] {
 		if item != nil {
-			foundIds = append(foundIds, *item["AccountID"].S)
+			foundIds = append(foundIds, item["AccountID"].(*types.AttributeValueMemberS).Value)
 		}
 	}
+
 	for _, val := range accountIds {
-		if !slices.Contains[[]string](foundIds, val) {
+		if !slices.Contains(foundIds, val) {
 			notFoundUsers = append(notFoundUsers, val)
 			err = errors.New("user_not_found")
 		}
@@ -65,16 +68,16 @@ func CheckUsersExist(dbSvc *dynamodb.DynamoDB, accountIds []string) ([]string, e
 	return notFoundUsers, err
 }
 
-func CreateAccountWithBalance(dbSvc *dynamodb.DynamoDB, accountId string, amount float64) error {
-	item := map[string]*dynamodb.AttributeValue{
-		"AccountID": {
-			S: aws.String(accountId),
+func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount float64) error {
+	item := map[string]types.AttributeValue{
+		"AccountID": &types.AttributeValueMemberS{
+			Value: accountId,
 		},
-		"Amount": {
-			N: aws.String(fmt.Sprintf("%f", amount)),
+		"Amount": &types.AttributeValueMemberN{
+			Value: fmt.Sprintf("%f", amount),
 		},
-		"CreatedAt": {
-			N: aws.String(fmt.Sprintf("%d", getCurrentTimestamp())),
+		"CreatedAt": &types.AttributeValueMemberN{
+			Value: fmt.Sprintf("%d", getCurrentTimestamp()),
 		},
 	}
 
@@ -84,17 +87,17 @@ func CreateAccountWithBalance(dbSvc *dynamodb.DynamoDB, accountId string, amount
 		Item:      item,
 	}
 
-	_, err := dbSvc.PutItem(input)
+	_, err := dbSvc.PutItem(context.TODO(), input)
 	log.Printf("the error is: %v", err)
 	return err
 }
 
 // Function to inquire about a user's balance
-func InquireBalance(dbSvc *dynamodb.DynamoDB, AccountID string) (float64, error) {
-	result, err := dbSvc.GetItem(&dynamodb.GetItemInput{
+func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
+	result, err := dbSvc.GetItem(context.TODO(), &dynamodb.GetItemInput{
 		TableName: aws.String("UserBalanceTable"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"AccountID": {S: aws.String(AccountID)},
+		Key: map[string]types.AttributeValue{
+			"AccountID": &types.AttributeValueMemberS{Value: AccountID},
 		},
 	})
 	if err != nil {
@@ -104,15 +107,14 @@ func InquireBalance(dbSvc *dynamodb.DynamoDB, AccountID string) (float64, error)
 		return 0, fmt.Errorf("user %s does not exist", AccountID)
 	}
 	userBalance := UserBalance{}
-	err = dynamodbattribute.UnmarshalMap(result.Item, &userBalance)
+	err = attributevalue.UnmarshalMap(result.Item, &userBalance)
 	if err != nil {
 		return 0, fmt.Errorf("failed to unmarshal user balance for user %s: %v", AccountID, err)
 	}
 	return userBalance.Amount, nil
 }
 
-// Function to transfer credits from one user to another
-func TransferCredits(dbSvc *dynamodb.DynamoDB, fromAccountID, toAccountID string, amount float64) error {
+func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, amount float64) error {
 	// Create a new transaction input
 	userBalance, err := InquireBalance(dbSvc, fromAccountID)
 	if err != nil || amount > userBalance {
@@ -132,42 +134,42 @@ func TransferCredits(dbSvc *dynamodb.DynamoDB, fromAccountID, toAccountID string
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
-	avDebit, err := dynamodbattribute.MarshalMap(debitEntry)
+	avDebit, err := attributevalue.MarshalMap(debitEntry)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
-	avCredit, err := dynamodbattribute.MarshalMap(creditEntry)
+	avCredit, err := attributevalue.MarshalMap(creditEntry)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
 
 	input := &dynamodb.TransactWriteItemsInput{
-		TransactItems: []*dynamodb.TransactWriteItem{
+		TransactItems: []types.TransactWriteItem{
 			{
-				Update: &dynamodb.Update{
+				Update: &types.Update{
 					TableName: aws.String("UserBalanceTable"),
-					Key: map[string]*dynamodb.AttributeValue{
-						"AccountID": {S: aws.String(fromAccountID)},
+					Key: map[string]types.AttributeValue{
+						"AccountID": &types.AttributeValueMemberS{Value: fromAccountID},
 					},
 					UpdateExpression:          aws.String("SET Amount = Amount - :amount"),
-					ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":amount": {N: aws.String(fmt.Sprintf("%.2f", amount))}},
+					ExpressionAttributeValues: map[string]types.AttributeValue{":amount": &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)}},
 				},
 			},
 			{
-				Update: &dynamodb.Update{
+				Update: &types.Update{
 					TableName: aws.String("UserBalanceTable"),
-					Key: map[string]*dynamodb.AttributeValue{
-						"AccountID": {S: aws.String(toAccountID)}, // Replace with the other account's ID
+					Key: map[string]types.AttributeValue{
+						"AccountID": &types.AttributeValueMemberS{Value: toAccountID},
 					},
 					UpdateExpression:          aws.String("SET Amount = Amount + :amount"),
-					ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":amount": {N: aws.String(fmt.Sprintf("%.2f", amount))}},
+					ExpressionAttributeValues: map[string]types.AttributeValue{":amount": &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)}},
 				},
 			},
-			{Put: &dynamodb.Put{
+			{Put: &types.Put{
 				TableName: aws.String("LedgerTable"),
 				Item:      avDebit,
 			}}, // PUT debit
-			{Put: &dynamodb.Put{
+			{Put: &types.Put{
 				TableName: aws.String("LedgerTable"),
 				Item:      avCredit,
 			}}, // PUT credit
@@ -175,7 +177,7 @@ func TransferCredits(dbSvc *dynamodb.DynamoDB, fromAccountID, toAccountID string
 	}
 
 	// Perform the transaction
-	_, err = dbSvc.TransactWriteItems(input)
+	_, err = dbSvc.TransactWriteItems(context.TODO(), input)
 	if err != nil {
 		return fmt.Errorf("failed to debit from balance for user %s: %v", fromAccountID, err)
 	}
