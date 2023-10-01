@@ -111,9 +111,9 @@ func TestCheckUser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := CheckUserExists(tt.args.dbSvc, tt.args.accountId)
+			notF, err := CheckUsersExist(tt.args.dbSvc, []string{tt.args.accountId, "44322"})
 			if err != nil {
-				t.Errorf("there's an error: %v", err)
+				t.Errorf("there's an error: %v - notfound: %v", err, notF)
 				return
 			}
 		})
