@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -23,28 +24,45 @@ type UserBalance struct {
 	Amount    float64 `json:"Amount"`
 }
 
-func CheckUserExists(dbSvc *dynamodb.DynamoDB, accountId string) error {
-	// Prepare the input for the GetItem operation
-	input := &dynamodb.GetItemInput{
-		TableName: aws.String("UserBalanceTable"), // Replace with your DynamoDB table name
-		Key: map[string]*dynamodb.AttributeValue{
+func CheckUsersExist(dbSvc *dynamodb.DynamoDB, accountIds []string) ([]string, error) {
+	// Prepare the input for the BatchGetItem operation
+	keys := make([]map[string]*dynamodb.AttributeValue, len(accountIds))
+	var err error
+	for i, accountId := range accountIds {
+		keys[i] = map[string]*dynamodb.AttributeValue{
 			"AccountID": {
 				S: aws.String(accountId),
 			},
+		}
+	}
+	input := &dynamodb.BatchGetItemInput{
+		RequestItems: map[string]*dynamodb.KeysAndAttributes{
+			"UserBalanceTable": {
+				Keys: keys,
+			},
 		},
 	}
-	// Retrieve the item from DynamoDB
-	result, err := dbSvc.GetItem(input)
+	// Retrieve the items from DynamoDB
+	result, err := dbSvc.BatchGetItem(input)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if result.Item == nil {
-		return errors.New("empty_user")
-	} else {
-		log.Printf("the found user is: %#v", result.Item)
-		return nil
+	var notFoundUsers []string
+	var foundIds []string
+	for _, item := range result.Responses["UserBalanceTable"] {
+		if item != nil {
+			foundIds = append(foundIds, *item["AccountID"].S)
+		}
 	}
+	for _, val := range accountIds {
+		if !slices.Contains[[]string](foundIds, val) {
+			notFoundUsers = append(notFoundUsers, val)
+			err = errors.New("user_not_found")
+		}
+	}
+
+	return notFoundUsers, err
 }
 
 func CreateAccountWithBalance(dbSvc *dynamodb.DynamoDB, accountId string, amount float64) error {
