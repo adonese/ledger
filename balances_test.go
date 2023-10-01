@@ -13,6 +13,7 @@ var _testSess *session.Session
 var _dbSvc *dynamodb.DynamoDB
 
 func init() {
+	var err error
 	_testSess, err = session.NewSession(&aws.Config{
 		Region: aws.String("eu-north-1"),
 	})
@@ -77,6 +78,7 @@ func Test_createAccountWithBalance(t *testing.T) {
 	type args struct {
 		dbSvc     *dynamodb.DynamoDB
 		accountId string
+		amount    float64
 	}
 	tests := []struct {
 		name    string
@@ -87,8 +89,32 @@ func Test_createAccountWithBalance(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := createAccountWithBalance(tt.args.dbSvc, tt.args.accountId); (err != nil) != tt.wantErr {
+			if err := CreateAccountWithBalance(tt.args.dbSvc, tt.args.accountId, (tt.args.amount)); (err != nil) != tt.wantErr {
 				t.Errorf("createAccountWithBalance() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCheckUser(t *testing.T) {
+	type args struct {
+		dbSvc     *dynamodb.DynamoDB
+		accountId string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    bool
+		wantErr bool
+	}{
+		{"testIsUser", args{dbSvc: _dbSvc, accountId: "adonese"}, true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckUserExists(tt.args.dbSvc, tt.args.accountId)
+			if err != nil {
+				t.Errorf("there's an error: %v", err)
+				return
 			}
 		})
 	}
