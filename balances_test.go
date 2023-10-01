@@ -1,32 +1,33 @@
 package ledger
 
 import (
+	"context"
 	"log"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
-var _testSess *session.Session
-var _dbSvc *dynamodb.DynamoDB
+var _dbSvc *dynamodb.Client
 
 func init() {
 	var err error
-	_testSess, err = session.NewSession(&aws.Config{
-		Region: aws.String("eu-north-1"),
-	})
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion("eu-north-1"),
+	)
 	if err != nil {
 		log.Fatal("Failed to create DynamoDB session:", err)
 	}
-	_dbSvc = dynamodb.New(_testSess)
+
+	_dbSvc = dynamodb.NewFromConfig(cfg)
 }
 
 func Test_transferCredits(t *testing.T) {
 
 	type args struct {
-		dbSvc         *dynamodb.DynamoDB
+		dbSvc         *dynamodb.Client
 		fromAccountID string
 		toAccountID   string
 		amount        float64
@@ -36,7 +37,7 @@ func Test_transferCredits(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"testing transfer", args{fromAccountID: "adonese", toAccountID: "mj", dbSvc: _dbSvc, amount: 10}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 322}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,7 +50,7 @@ func Test_transferCredits(t *testing.T) {
 
 func Test_inquireBalance(t *testing.T) {
 	type args struct {
-		dbSvc     *dynamodb.DynamoDB
+		dbSvc     *dynamodb.Client
 		AccountID string
 	}
 	tests := []struct {
@@ -76,7 +77,7 @@ func Test_inquireBalance(t *testing.T) {
 
 func Test_createAccountWithBalance(t *testing.T) {
 	type args struct {
-		dbSvc     *dynamodb.DynamoDB
+		dbSvc     *dynamodb.Client
 		accountId string
 		amount    float64
 	}
@@ -98,7 +99,7 @@ func Test_createAccountWithBalance(t *testing.T) {
 
 func TestCheckUser(t *testing.T) {
 	type args struct {
-		dbSvc     *dynamodb.DynamoDB
+		dbSvc     *dynamodb.Client
 		accountId string
 	}
 	tests := []struct {

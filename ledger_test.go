@@ -4,13 +4,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
 func TestRecordDebit(t *testing.T) {
 
 	type args struct {
-		db        *dynamodb.DynamoDB
+		db        *dynamodb.Client
 		accountID string
 		amount    float64
 	}
@@ -39,7 +39,7 @@ func TestInitializeLedger(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *dynamodb.DynamoDB
+		want    *dynamodb.Client
 		wantErr bool
 	}{
 		// TODO: Add test cases.
