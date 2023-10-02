@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 // InitializeLedger is a helper function to authenticate with AWS and create a DynamoDB client
@@ -26,6 +27,20 @@ func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.Client, er
 	}
 
 	return dynamodb.NewFromConfig(cfg), nil
+
+}
+
+// NewS3 returns a new S3 object
+func NewS3(accessKey, secretKey, region string) (*s3.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return s3.NewFromConfig(cfg), nil
 
 }
 
