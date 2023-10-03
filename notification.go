@@ -113,7 +113,7 @@ func SendEmail(sesSvc *ses.Client, msg Message) error {
 				Data: aws.String(msg.Subject),
 			},
 		},
-		Source: aws.String("adonese@noebs.sd"),
+		Source: aws.String("info.payment@nil.sd"),
 	}
 
 	_, err := sesSvc.SendEmail(context.TODO(), input)
