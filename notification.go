@@ -99,27 +99,43 @@ func SendSMS(sms SMS) error {
 }
 
 func SendEmail(sesSvc *ses.Client, msg Message) error {
-	input := &ses.SendEmailInput{
+
+	// Specify the email details
+	sender := "info.payment@nil.sd"
+	recipient := "adonese@nil.sd"
+	subject := "Hello from AWS SES!"
+	htmlBody := "<h1>Hello!</h1><p>This is a test email sent using AWS SES.</p>"
+	textBody := "Hello!\n\nThis is a test email sent using AWS SES."
+
+	// Create the email input
+	emailInput := &ses.SendEmailInput{
 		Destination: &sestypes.Destination{
-			ToAddresses: []string{msg.To},
+			ToAddresses: []string{recipient},
 		},
 		Message: &sestypes.Message{
 			Body: &sestypes.Body{
+				Html: &sestypes.Content{
+					Data: aws.String(htmlBody),
+				},
 				Text: &sestypes.Content{
-					Data: aws.String(msg.Body),
+					Data: aws.String(textBody),
 				},
 			},
 			Subject: &sestypes.Content{
-				Data: aws.String(msg.Subject),
+				Data: aws.String(subject),
 			},
 		},
-		Source: aws.String("info.payment@nil.sd"),
+		Source: aws.String(sender),
 	}
 
-	_, err := sesSvc.SendEmail(context.TODO(), input)
+	// Send the email
+	resp, err := sesSvc.SendEmail(context.TODO(), emailInput)
 	if err != nil {
+		log.Printf("failed to send email: %v", err)
 		return err
 	}
-
+	// Print the message ID if the email was sent successfully
+	fmt.Printf("Email sent! Message ID: %s\n", *resp.MessageId)
 	return nil
+
 }
