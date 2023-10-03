@@ -11,8 +11,6 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	sestypes "github.com/aws/aws-sdk-go-v2/service/ses/types"
 )
@@ -30,8 +28,6 @@ func HandleDynamoDBStream(ctx context.Context, event events.DynamoDBEvent) error
 	if err != nil {
 		return err
 	}
-
-	dbSvc := dynamodb.NewFromConfig(cfg)
 	sesSvc := ses.NewFromConfig(cfg)
 
 	for _, record := range event.Records {
@@ -57,24 +53,24 @@ func HandleDynamoDBStream(ctx context.Context, event events.DynamoDBEvent) error
 			return err
 		}
 
-		// Update DynamoDB record to mark it as processed
-		_, err = dbSvc.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-			TableName: aws.String("LedgerTable"),
-			Key: map[string]types.AttributeValue{
-				"Id": &types.AttributeValueMemberS{Value: newImage["Id"].String()},
-			},
-			ExpressionAttributeNames: map[string]string{
-				"#P": "Processed",
-			},
-			ExpressionAttributeValues: map[string]types.AttributeValue{
-				":p": &types.AttributeValueMemberBOOL{Value: true},
-			},
-			UpdateExpression: aws.String("SET #P = :p"),
-		})
-		if err != nil {
-			log.Println("Error updating DynamoDB record:", err)
-			return err
-		}
+		// // Update DynamoDB record to mark it as processed
+		// _, err = dbSvc.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		// 	TableName: aws.String("LedgerTable"),
+		// 	Key: map[string]types.AttributeValue{
+		// 		"Id": &types.AttributeValueMemberS{Value: newImage["Id"].String()},
+		// 	},
+		// 	ExpressionAttributeNames: map[string]string{
+		// 		"#P": "Processed",
+		// 	},
+		// 	ExpressionAttributeValues: map[string]types.AttributeValue{
+		// 		":p": &types.AttributeValueMemberBOOL{Value: true},
+		// 	},
+		// 	UpdateExpression: aws.String("SET #P = :p"),
+		// })
+		// if err != nil {
+		// 	log.Println("Error updating DynamoDB record:", err)
+		// 	return err
+		// }
 	}
 
 	return nil
