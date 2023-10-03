@@ -30,7 +30,10 @@ require (
 
 require (
 	github.com/a-h/templ v0.2.364
+	github.com/aws/aws-lambda-go v1.41.0
 	github.com/aws/aws-sdk-go-v2 v1.21.0
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.10.40
+	github.com/aws/aws-sdk-go-v2/service/ses v1.16.8
+	github.com/aws/aws-sdk-go-v2/service/sns v1.22.0
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )
