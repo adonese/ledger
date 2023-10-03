@@ -103,9 +103,9 @@ func SendEmail(sesSvc *ses.Client, msg Message) error {
 	// Specify the email details
 	sender := "info.payment@nil.sd"
 	recipient := "adonese@nil.sd"
-	subject := "Hello from AWS SES!"
-	htmlBody := "<h1>Hello!</h1><p>This is a test email sent using AWS SES.</p>"
-	textBody := "Hello!\n\nThis is a test email sent using AWS SES."
+	subject := msg.Subject
+	htmlBody := msg.Body
+	textBody := msg.Body
 
 	// Create the email input
 	emailInput := &ses.SendEmailInput{
