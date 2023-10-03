@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/google/uuid"
 )
 
 type Balances struct {
@@ -116,6 +117,7 @@ func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
 
 func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, amount float64) error {
 	// Create a new transaction input
+	uid := uuid.New().String()
 	userBalance, err := InquireBalance(dbSvc, fromAccountID)
 	if err != nil || amount > userBalance {
 		return errors.New("insufficient balance")
@@ -123,13 +125,13 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	debitEntry := LedgerEntry{
 		AccountID:     fromAccountID,
 		Amount:        amount,
-		TransactionID: "1212",
+		TransactionID: uid,
 		Type:          "debit",
 	}
 	creditEntry := LedgerEntry{
 		AccountID:     toAccountID,
 		Amount:        amount,
-		TransactionID: "1212",
+		TransactionID: uid,
 		Type:          "credit",
 	}
 
