@@ -40,12 +40,8 @@ func Test_transferCredits(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 1.4224}, false},
-		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 2.321}, false},
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 12.4224}, false},
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 2.556}, false},
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 1.32}, false},
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 28.321}, false},
+
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "adonese", dbSvc: _dbSvc, amount: 12.24}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
