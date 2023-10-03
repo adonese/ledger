@@ -35,7 +35,7 @@ func HandleDynamoDBStream(ctx context.Context, event events.DynamoDBEvent) error
 
 		// Extract the necessary data from the new image
 		accountID := newImage["AccountID"].String()
-		amount := newImage["Amount"].String()
+		amount := newImage["Amount"].Number()
 		opType := newImage["Message"].String()
 		tranID := newImage["TransactionID"]
 
