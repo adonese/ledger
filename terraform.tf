@@ -1,0 +1,62 @@
+
+resource "aws_dynamodb_table" "UserBalanceTable" {
+  name           = "UserBalanceTable"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 20
+  write_capacity = 20
+  hash_key       = "AccountID"
+
+  attribute {
+    name = "AccountID"
+    type = "S"
+  }
+}
+
+
+resource "aws_ses_domain_identity" "example" {
+  domain = "nil.sd"
+}
+
+
+
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "aws" {
+  region  = "us-east-1"
+  profile = "default"
+}
+
+
+resource "aws_dynamodb_table" "ledger_table" {
+  name           = "LedgerTable"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 20
+  write_capacity = 20
+  hash_key       = "AccountID"
+
+  attribute {
+    name = "AccountID"
+    type = "S"
+  }
+
+  attribute {
+    name = "TransactionID"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "TransactionIndex"
+    hash_key           = "TransactionID"
+    write_capacity     = 20
+    read_capacity      = 20
+    projection_type    = "ALL"
+  }
+}
