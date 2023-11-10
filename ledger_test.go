@@ -6,6 +6,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
+var _AWS_REGION = "us-east-1"
+
 func TestRecordDebit(t *testing.T) {
 
 	type args struct {
@@ -39,7 +41,7 @@ func TestInitializeLedger(t *testing.T) {
 		name string
 		args args
 	}{
-		{"test_initializing aws", args{accessKey: "", secretKey: "", region: "eu-north-1"}},
+		{"test_initializing aws", args{accessKey: "", secretKey: "", region: _AWS_REGION}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

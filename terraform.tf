@@ -13,6 +13,21 @@ resource "aws_dynamodb_table" "UserBalanceTable" {
 }
 
 
+resource "aws_dynamodb_table" "NilUsersTable" {
+  name           = "NilUsers"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 20
+  write_capacity = 20
+  hash_key       = "AccountID"
+
+  attribute {
+    name = "AccountID"
+    type = "S"
+  }
+}
+
+
+
 resource "aws_ses_domain_identity" "example" {
   domain = "nil.sd"
 }
@@ -33,6 +48,7 @@ provider "aws" {
   region  = "us-east-1"
   profile = "default"
 }
+
 
 
 resource "aws_dynamodb_table" "ledger_table" {
@@ -59,4 +75,18 @@ resource "aws_dynamodb_table" "ledger_table" {
     read_capacity      = 20
     projection_type    = "ALL"
   }
+}
+
+variable "github_token" {}
+
+resource "aws_amplify_app" "app" {
+  name = "nilpay"
+  repository = "https://github.com/nilpay/dashboard"
+  oauth_token = var.github_token
+}
+
+
+resource "aws_amplify_branch" "branch" {
+  app_id  = aws_amplify_app.app.id
+  branch_name = "main"
 }
