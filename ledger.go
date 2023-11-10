@@ -16,6 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+var AWS_REGION = "us-east-1"
+
 // InitializeLedger is a helper function to authenticate with AWS and create a DynamoDB client
 func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.Client, error) {
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -57,7 +59,7 @@ func test() {
 	var _dbSvc *dynamodb.Client
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion("eu-north-1"),
+		config.WithRegion(AWS_REGION),
 	)
 	if err != nil {
 		log.Fatal("Failed to create DynamoDB session:", err)

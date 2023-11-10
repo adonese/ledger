@@ -17,7 +17,7 @@ func init() {
 	var err error
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion("eu-north-1"),
+		config.WithRegion(_AWS_REGION),
 	)
 	if err != nil {
 		log.Fatal("Failed to create DynamoDB session:", err)
