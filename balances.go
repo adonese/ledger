@@ -16,6 +16,11 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	NilUsers    = "NilUsers"
+	LedgerTable = "LedgerTable"
+)
+
 type Balances struct {
 	AccountID string  `json:"AccountID"`
 	Amount    float64 `json:"Amount"`
@@ -39,7 +44,7 @@ func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, err
 	}
 	input := &dynamodb.BatchGetItemInput{
 		RequestItems: map[string]types.KeysAndAttributes{
-			"UserBalanceTable": {
+			NilUsers: {
 				Keys: keys,
 			},
 		},
@@ -53,7 +58,7 @@ func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, err
 
 	var notFoundUsers []string
 	var foundIds []string
-	for _, item := range result.Responses["UserBalanceTable"] {
+	for _, item := range result.Responses[NilUsers] {
 		if item != nil {
 			foundIds = append(foundIds, item["AccountID"].(*types.AttributeValueMemberS).Value)
 		}
@@ -84,7 +89,7 @@ func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount f
 
 	// Put the item into the DynamoDB table
 	input := &dynamodb.PutItemInput{
-		TableName: aws.String("UserBalanceTable"),
+		TableName: aws.String(NilUsers),
 		Item:      item,
 	}
 
@@ -96,7 +101,7 @@ func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount f
 // Function to inquire about a user's balance
 func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
 	result, err := dbSvc.GetItem(context.TODO(), &dynamodb.GetItemInput{
-		TableName: aws.String("UserBalanceTable"),
+		TableName: aws.String(NilUsers),
 		Key: map[string]types.AttributeValue{
 			"AccountID": &types.AttributeValueMemberS{Value: AccountID},
 		},
@@ -149,7 +154,7 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		TransactItems: []types.TransactWriteItem{
 			{
 				Update: &types.Update{
-					TableName: aws.String("UserBalanceTable"),
+					TableName: aws.String(NilUsers),
 					Key: map[string]types.AttributeValue{
 						"AccountID": &types.AttributeValueMemberS{Value: fromAccountID},
 					},
@@ -159,7 +164,7 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 			},
 			{
 				Update: &types.Update{
-					TableName: aws.String("UserBalanceTable"),
+					TableName: aws.String(NilUsers),
 					Key: map[string]types.AttributeValue{
 						"AccountID": &types.AttributeValueMemberS{Value: toAccountID},
 					},
