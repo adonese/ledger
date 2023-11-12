@@ -20,7 +20,7 @@ func TestRecordDebit(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 1000000}, false},
+		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 1234441}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

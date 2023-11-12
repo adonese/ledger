@@ -90,7 +90,7 @@ func Test_createAccountWithBalance(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1"}, true},
+		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 13484838}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
