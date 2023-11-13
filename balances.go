@@ -75,16 +75,27 @@ func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, err
 }
 
 func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount float64) error {
+	// parse float to string
+
 	item := map[string]types.AttributeValue{
-		"AccountID": &types.AttributeValueMemberS{
-			Value: accountId,
-		},
-		"Amount": &types.AttributeValueMemberN{
-			Value: fmt.Sprintf("%f", amount),
-		},
-		"CreatedAt": &types.AttributeValueMemberN{
-			Value: fmt.Sprintf("%d", getCurrentTimestamp()),
-		},
+		"AccountID":           &types.AttributeValueMemberS{Value: accountId},
+		"full_name":           &types.AttributeValueMemberS{Value: "test-account"},
+		"birthday":            &types.AttributeValueMemberS{Value: ""},
+		"city":                &types.AttributeValueMemberS{Value: ""},
+		"dependants":          &types.AttributeValueMemberN{Value: "0"},
+		"income_last_year":    &types.AttributeValueMemberN{Value: "0"},
+		"enroll_smes_program": &types.AttributeValueMemberBOOL{Value: false},
+		"confirm":             &types.AttributeValueMemberBOOL{Value: false},
+		"external_auth":       &types.AttributeValueMemberBOOL{Value: false},
+		"password":            &types.AttributeValueMemberS{Value: ""},
+		"created_at":          &types.AttributeValueMemberS{Value: time.Now().Local().String()},
+		"is_verified":         &types.AttributeValueMemberBOOL{Value: true},
+		"id_type":             &types.AttributeValueMemberS{Value: ""},
+		"mobile_number":       &types.AttributeValueMemberS{Value: ""},
+		"id_number":           &types.AttributeValueMemberS{Value: ""},
+		"pic_id_card":         &types.AttributeValueMemberS{Value: ""},
+		"amount":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+		"currency":            &types.AttributeValueMemberS{Value: "SDG"},
 	}
 
 	// Put the item into the DynamoDB table
