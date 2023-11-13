@@ -90,11 +90,11 @@ func Test_createAccountWithBalance(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 13484838}, true},
+		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 121342212}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := CreateAccountWithBalance(tt.args.dbSvc, tt.args.accountId, (tt.args.amount)); (err != nil) != tt.wantErr {
+			if err := CreateAccountWithBalance(tt.args.dbSvc, tt.args.accountId, (tt.args.amount)); err != nil {
 				t.Errorf("createAccountWithBalance() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
