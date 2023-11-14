@@ -21,18 +21,25 @@ var (
 	LedgerTable = "LedgerTable"
 )
 
+// Balances represents the amount of money in a user's account.
+// AccountID is a unique identifier for the account, and Amount
+// is the balance available in the account.
 type Balances struct {
 	AccountID string  `json:"AccountID"`
 	Amount    float64 `json:"Amount"`
 	// add meta-fields here
 }
 
-// UserBalance represents the user's balance in the DynamoDB table
+// UserBalance represents the user's balance in the DynamoDB table.
+// It includes the AccountID and the associated Amount.
 type UserBalance struct {
 	AccountID string  `json:"AccountID"`
 	Amount    float64 `json:"Amount"`
 }
 
+// CheckUsersExist checks if the provided account IDs exist in the DynamoDB table.
+// It takes a DynamoDB client and a slice of account IDs and returns a slice of
+// non-existent account IDs and an error, if any.
 func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, error) {
 	// Prepare the input for the BatchGetItem operation
 	keys := make([]map[string]types.AttributeValue, len(accountIds))
@@ -74,6 +81,9 @@ func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, err
 	return notFoundUsers, err
 }
 
+// CreateAccountWithBalance creates a new user account with an initial balance.
+// It takes a DynamoDB client, an account ID, and an amount to be set as the initial
+// balance. It returns an error if the account creation fails.
 func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount float64) error {
 	// parse float to string
 
@@ -109,7 +119,9 @@ func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount f
 	return err
 }
 
-// Function to inquire about a user's balance
+// InquireBalance inquires the balance of a given user account.
+// It takes a DynamoDB client and an account ID, returning the balance
+// as a float64 and an error if the inquiry fails or the user does not exist.
 func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
 	result, err := dbSvc.GetItem(context.TODO(), &dynamodb.GetItemInput{
 		TableName: aws.String(NilUsers),
@@ -131,6 +143,11 @@ func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
 	return userBalance.Amount, nil
 }
 
+// TransferCredits transfers a specified amount from one account to another.
+// It performs a transaction that debits one account and credits another.
+// It takes a DynamoDB client, the account IDs for the sender and receiver, and
+// the amount to transfer. It returns an error if the transfer fails due to
+// insufficient funds or other issues.
 func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, amount float64) error {
 	// Create a new transaction input
 	uid := uuid.New().String()
@@ -143,12 +160,14 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		Amount:        amount,
 		TransactionID: uid,
 		Type:          "debit",
+		Time:          getCurrentTimestamp(),
 	}
 	creditEntry := LedgerEntry{
 		AccountID:     toAccountID,
 		Amount:        amount,
 		TransactionID: uid,
 		Type:          "credit",
+		Time:          getCurrentTimestamp(),
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
@@ -200,6 +219,50 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		return fmt.Errorf("failed to debit from balance for user %s: %v", fromAccountID, err)
 	}
 	return nil
+}
+
+// GetTransactions retrieves a list of transactions for a specified account.
+// It takes a DynamoDB client, an account ID, a limit for the number of transactions
+// to retrieve, and an optional lastTransactionID for pagination.
+// It returns a slice of LedgerEntry, the ID of the last transaction, and an error, if any.
+func GetTransactions(dbSvc *dynamodb.Client, accountID string, limit int32, lastTransactionID string) ([]LedgerEntry, string, error) {
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String("LedgerTable"),
+		KeyConditionExpression: aws.String("AccountID = :accountId"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":accountId": &types.AttributeValueMemberS{Value: accountID},
+		},
+		Limit: aws.Int32(limit),
+	}
+
+	// If a lastTransactionID was provided, include it in the input
+	if lastTransactionID != "" {
+		input.ExclusiveStartKey = map[string]types.AttributeValue{
+			"AccountID":     &types.AttributeValueMemberS{Value: accountID},
+			"TransactionID": &types.AttributeValueMemberS{Value: lastTransactionID},
+		}
+	}
+
+	// Execute the query
+	resp, err := dbSvc.Query(context.TODO(), input)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to fetch transactions: %v", err)
+	}
+
+	// Unmarshal the items
+	var transactions []LedgerEntry
+	err = attributevalue.UnmarshalListOfMaps(resp.Items, &transactions)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to unmarshal transactions: %v", err)
+	}
+
+	// If there are more items to be fetched, return the TransactionID of the last item
+	var newLastTransactionID string
+	if resp.LastEvaluatedKey != nil {
+		newLastTransactionID = resp.LastEvaluatedKey["TransactionID"].(*types.AttributeValueMemberS).Value
+	}
+
+	return transactions, newLastTransactionID, nil
 }
 
 // Helper function to get the current timestamp

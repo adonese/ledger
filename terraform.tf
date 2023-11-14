@@ -57,6 +57,7 @@ resource "aws_dynamodb_table" "ledger_table" {
   read_capacity  = 20
   write_capacity = 20
   hash_key       = "AccountID"
+  range_key      = "TransactionID"  # Add this line to set TransactionID as the sort key
 
   attribute {
     name = "AccountID"
@@ -68,6 +69,7 @@ resource "aws_dynamodb_table" "ledger_table" {
     type = "S"
   }
 
+  # Adjust your GSI as needed. Depending on your access patterns, you might not need it anymore
   global_secondary_index {
     name               = "TransactionIndex"
     hash_key           = "TransactionID"
@@ -77,16 +79,16 @@ resource "aws_dynamodb_table" "ledger_table" {
   }
 }
 
-variable "github_token" {}
+# variable "github_token" {}
 
-resource "aws_amplify_app" "app" {
-  name = "nilpay"
-  repository = "https://github.com/nilpay/dashboard"
-  oauth_token = var.github_token
-}
+#resource "aws_amplify_app" "app" {
+#  name = "nilpay"
+#  repository = "https://github.com/nilpay/dashboard"
+#  oauth_token = var.github_token
+#}
 
 
-resource "aws_amplify_branch" "branch" {
-  app_id  = aws_amplify_app.app.id
-  branch_name = "main"
-}
+#resource "aws_amplify_branch" "branch" {
+#  app_id  = aws_amplify_app.app.id
+#  branch_name = "main"
+#}
