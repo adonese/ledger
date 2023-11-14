@@ -1,3 +1,9 @@
+// Package ledger provides a set of functions to manage financial transactions
+// and user balances in a ledger system. It supports operations like checking
+// user existence, creating accounts, inquiring balances, transferring credits,
+// and recording transactions. It uses AWS DynamoDB for data storage and AWS SES
+// for sending notifications.
+
 package ledger
 
 import (
@@ -8,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/google/uuid"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -18,7 +25,9 @@ import (
 
 var AWS_REGION = "us-east-1"
 
-// InitializeLedger is a helper function to authenticate with AWS and create a DynamoDB client
+// InitializeLedger initializes the DynamoDB client using AWS credentials.
+// It takes an access key, a secret key, and a region and returns a DynamoDB client
+// and an error if the initialization fails.
 func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.Client, error) {
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(region),
@@ -32,7 +41,9 @@ func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.Client, er
 
 }
 
-// NewS3 returns a new S3 object
+// NewS3 initializes an S3 client using AWS credentials.
+// It takes an access key, a secret key, and a region and returns an S3 client
+// and an error if the initialization fails.
 func NewS3(accessKey, secretKey, region string) (*s3.Client, error) {
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(region),
@@ -46,12 +57,15 @@ func NewS3(accessKey, secretKey, region string) (*s3.Client, error) {
 
 }
 
-// LedgerEntry represents a single entry onto LedgerTable
+// LedgerEntry represents a single entry in the ledger table.
+// It includes the account ID, transaction ID, the amount transacted,
+// the type of transaction (debit or credit), and the time of transaction.
 type LedgerEntry struct {
-	AccountID     string  `json:"AccountID"`
-	TransactionID string  `json:"TransactionID"`
-	Amount        float64 `json:"Amount"`
-	Type          string  `json:"Type"`
+	AccountID     string  `dynamodbav:"AccountID" json:"account_id,omitempty"`
+	TransactionID string  `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
+	Amount        float64 `dynamodbav:"Amount" json:"amount,omitempty"`
+	Type          string  `dynamodbav:"Type" json:"type,omitempty"`
+	Time          int64   `dynamodbav:"Time" json:"time,omitempty"`
 }
 
 func test() {
@@ -79,12 +93,17 @@ func test() {
 	}
 }
 
+// RecordCredit records a credit transaction for an account.
+// It takes a DynamoDB client, an account ID, and the amount to be credited.
+// It returns an error if the recording fails.
 func RecordCredit(client *dynamodb.Client, accountID string, amount float64) error {
 	// Create a new ledger entry
 	entry := LedgerEntry{
-		AccountID: accountID,
-		Amount:    amount,
-		Type:      "credit",
+		AccountID:     accountID,
+		Amount:        amount,
+		Type:          "credit",
+		TransactionID: uuid.NewString(),
+		Time:          getCurrentTimestamp(),
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
@@ -108,19 +127,23 @@ func RecordCredit(client *dynamodb.Client, accountID string, amount float64) err
 	return nil
 }
 
+// RecordDebit records a debit transaction for an account.
+// It takes a DynamoDB client, an account ID, and the amount to be debited.
+// It returns an error if the recording fails.
 func RecordDebit(client *dynamodb.Client, accountID string, amount float64) error {
 	// Create a new ledger entry
 	entry := LedgerEntry{
 		AccountID:     accountID,
-		TransactionID: "1234",
+		TransactionID: uuid.NewString(),
 		Amount:        amount,
 		Type:          "debit",
+		Time:          getCurrentTimestamp(),
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
 	av, err := attributevalue.MarshalMap(entry)
 	if err != nil {
-		return errors.New("failed to marshal ledger entry")
+		return fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
 
 	// Create the input for the PutItem operation
@@ -138,7 +161,10 @@ func RecordDebit(client *dynamodb.Client, accountID string, amount float64) erro
 	return nil
 }
 
-// Function to store a transaction in the LedgerTable
+// storeTransaction stores a transaction in the ledger table.
+// It takes a DynamoDB client, a user ID, the type of transaction, and the amount.
+// It returns an error if the transaction cannot be stored.
+
 func storeTransaction(dbSvc *dynamodb.Client, userID, transactionType string, amount float64) error {
 	item := map[string]types.AttributeValue{
 		"AccountID":     &types.AttributeValueMemberS{Value: userID},

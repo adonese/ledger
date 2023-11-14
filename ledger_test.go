@@ -20,11 +20,13 @@ func TestRecordDebit(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 10000000}, false},
+		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 101}, false},
+		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 101}, false},
+		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 101}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := RecordDebit(tt.args.db, tt.args.accountID, tt.args.amount); (err != nil) != tt.wantErr {
+			if err := RecordDebit(tt.args.db, tt.args.accountID, tt.args.amount); err != nil {
 				t.Errorf("RecordDebit() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
