@@ -164,7 +164,6 @@ func RecordDebit(client *dynamodb.Client, accountID string, amount float64) erro
 // storeTransaction stores a transaction in the ledger table.
 // It takes a DynamoDB client, a user ID, the type of transaction, and the amount.
 // It returns an error if the transaction cannot be stored.
-
 func storeTransaction(dbSvc *dynamodb.Client, userID, transactionType string, amount float64) error {
 	item := map[string]types.AttributeValue{
 		"AccountID":     &types.AttributeValueMemberS{Value: userID},
