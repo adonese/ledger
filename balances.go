@@ -188,7 +188,7 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 					Key: map[string]types.AttributeValue{
 						"AccountID": &types.AttributeValueMemberS{Value: fromAccountID},
 					},
-					UpdateExpression:          aws.String("SET Amount = Amount - :amount"),
+					UpdateExpression:          aws.String("SET amount = amount - :amount"),
 					ExpressionAttributeValues: map[string]types.AttributeValue{":amount": &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)}},
 				},
 			},
@@ -198,16 +198,16 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 					Key: map[string]types.AttributeValue{
 						"AccountID": &types.AttributeValueMemberS{Value: toAccountID},
 					},
-					UpdateExpression:          aws.String("SET Amount = Amount + :amount"),
+					UpdateExpression:          aws.String("SET amount = amount + :amount"),
 					ExpressionAttributeValues: map[string]types.AttributeValue{":amount": &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)}},
 				},
 			},
 			{Put: &types.Put{
-				TableName: aws.String("LedgerTable"),
+				TableName: aws.String(LedgerTable),
 				Item:      avDebit,
 			}}, // PUT debit
 			{Put: &types.Put{
-				TableName: aws.String("LedgerTable"),
+				TableName: aws.String(LedgerTable),
 				Item:      avCredit,
 			}}, // PUT credit
 		},
