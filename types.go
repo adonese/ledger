@@ -1,5 +1,10 @@
 package ledger
 
+import (
+	"encoding/json"
+	"time"
+)
+
 // SMS defines the structure for sending SMS notifications.
 // It includes the API key, sender information, recipient mobile number, message content,
 // and the SMS gateway URL.
@@ -40,4 +45,47 @@ type User struct {
 	Amount            float64 `dynamodbav:"amount" json:"amount,omitempty"`
 	Currency          string  `dynamodbav:"currency" json:"currency,omitempty"`
 	Version           int64   `dynamodbav:"Version" json:"version,omitempty"`
+	PublicKey         string  `json:"public_key,omitempty"`
+}
+
+func NewDefaultAccount(accountId, mobileNumber, name, pubkey string) User {
+	return User{
+		AccountID:         accountId,
+		FullName:          name,
+		Birthday:          "",
+		City:              "",
+		Dependants:        0,
+		IncomeLastYear:    0,
+		EnrollSMEsProgram: false,
+		Confirm:           false,
+		ExternalAuth:      false,
+		Password:          "",
+		CreatedAt:         time.Now().Local().String(),
+		IsVerified:        true,
+		IDType:            "",
+		MobileNumber:      mobileNumber,
+		IDNumber:          "",
+		PicIDCard:         "",
+		Amount:            0,
+		Currency:          "SDG",
+	}
+}
+
+func (u *User) UnmarshalJSON(b []byte) error {
+	type Alias User
+	aux := &struct {
+		Mobile    string `json:"mobile"`
+		FullName  string `json:"fullname"`
+		PublicKey string `json:"user_pubkey"`
+		*Alias
+	}{
+		Alias: (*Alias)(u),
+	}
+	if err := json.Unmarshal(b, &aux); err != nil {
+		return err
+	}
+	u.MobileNumber = aux.Mobile // map "mobile" to "MobileNumber"
+	u.FullName = aux.FullName   // map "fullname" to "full_name"
+	u.PublicKey = aux.PublicKey // map "user_pubkey" to "public_key"
+	return nil
 }

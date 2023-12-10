@@ -66,6 +66,7 @@ func Test_inquireBalance(t *testing.T) {
 		wantErr bool
 	}{
 		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "249_ACCT_1"}, 30, false},
+		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "12"}, 2636, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
