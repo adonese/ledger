@@ -121,6 +121,40 @@ func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount f
 	return err
 }
 
+func CreateAccount(dbSvc *dynamodb.Client, user User) error {
+	item := map[string]types.AttributeValue{
+		"AccountID":           &types.AttributeValueMemberS{Value: user.AccountID},
+		"full_name":           &types.AttributeValueMemberS{Value: user.FullName},
+		"birthday":            &types.AttributeValueMemberS{Value: user.Birthday},
+		"city":                &types.AttributeValueMemberS{Value: user.City},
+		"dependants":          &types.AttributeValueMemberN{Value: strconv.Itoa(user.Dependants)},
+		"income_last_year":    &types.AttributeValueMemberN{Value: strconv.Itoa(int(user.IncomeLastYear))},
+		"enroll_smes_program": &types.AttributeValueMemberBOOL{Value: user.EnrollSMEsProgram},
+		"confirm":             &types.AttributeValueMemberBOOL{Value: user.Confirm},
+		"external_auth":       &types.AttributeValueMemberBOOL{Value: user.ExternalAuth},
+		"password":            &types.AttributeValueMemberS{Value: user.Password},
+		"created_at":          &types.AttributeValueMemberS{Value: time.Now().Local().String()},
+		"is_verified":         &types.AttributeValueMemberBOOL{Value: user.IsVerified},
+		"id_type":             &types.AttributeValueMemberS{Value: user.IDType},
+		"mobile_number":       &types.AttributeValueMemberS{Value: user.MobileNumber},
+		"id_number":           &types.AttributeValueMemberS{Value: user.IDNumber},
+		"pic_id_card":         &types.AttributeValueMemberS{Value: user.PicIDCard},
+		"amount":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", user.Amount)},
+		"currency":            &types.AttributeValueMemberS{Value: "SDG"},
+		"Version":             &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
+	}
+
+	// Put the item into the DynamoDB table
+	input := &dynamodb.PutItemInput{
+		TableName: aws.String(NilUsers),
+		Item:      item,
+	}
+
+	_, err := dbSvc.PutItem(context.TODO(), input)
+	log.Printf("the error is: %v", err)
+	return err
+}
+
 func GetAccount(ctx context.Context, dbSvc *dynamodb.Client, accountID string) (*User, error) {
 	key := map[string]types.AttributeValue{
 		"AccountID": &types.AttributeValueMemberS{Value: accountID},
