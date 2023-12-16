@@ -43,7 +43,10 @@ func Test_transferCredits(t *testing.T) {
 		wantErr bool
 	}{
 
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 212}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 10}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 15}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 120}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 32}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -167,6 +170,63 @@ func TestGetTransactions(t *testing.T) {
 			}
 			if got1 != tt.want1 {
 				t.Errorf("GetTransactions() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func TestGetDetailedTransactions(t *testing.T) {
+	type args struct {
+		dbSvc     *dynamodb.Client
+		accountID string
+		limit     int32
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []TransactionEntry
+		wantErr bool
+	}{
+		{
+			name: "Fetch transactions for 249_ACCT_1",
+			args: args{
+				dbSvc:     _dbSvc, // Assuming _dbSvc is your DynamoDB client
+				accountID: "249_ACCT_1",
+				limit:     4,
+			},
+			want: []TransactionEntry{
+				{
+					AccountID:       "249_ACCT_1",
+					TransactionID:   "tx1", // Replace with the actual TransactionID
+					FromAccount:     "249_ACCT_1",
+					ToAccount:       "12",
+					Amount:          10,
+					Comment:         "Transfer credits",
+					TransactionDate: 1632835600, // Replace with the actual TransactionDate
+				},
+				{
+					AccountID:       "249_ACCT_1",
+					TransactionID:   "tx2", // Replace with the actual TransactionID
+					FromAccount:     "249_ACCT_1",
+					ToAccount:       "12",
+					Amount:          15,
+					Comment:         "Transfer credits",
+					TransactionDate: 1632835600, // Replace with the actual TransactionDate
+				},
+				// Add the rest of the transactions here...
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetDetailedTransactions(tt.args.dbSvc, tt.args.accountID, tt.args.limit)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetDetailedTransactions() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetDetailedTransactions() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
