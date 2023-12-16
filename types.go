@@ -89,3 +89,13 @@ func (u *User) UnmarshalJSON(b []byte) error {
 	u.PublicKey = aux.PublicKey // map "user_pubkey" to "public_key"
 	return nil
 }
+
+type TransactionEntry struct {
+	AccountID       string  `dynamodbav:"AccountID" json:"account_id,omitempty"`
+	TransactionID   string  `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
+	FromAccount     string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
+	ToAccount       string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
+	Amount          float64 `dynamodbav:"Amount" json:"amount,omitempty"`
+	Comment         string  `dynamodbav:"Comment" json:"comment,omitempty"`
+	TransactionDate int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
+}

@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	NilUsers    = "NilUsers"
-	LedgerTable = "LedgerTable"
+	NilUsers          = "NilUsers"
+	LedgerTable       = "LedgerTable"
+	TransactionsTable = "TransactionsTable"
 )
 
 // Balances represents the amount of money in a user's account.
@@ -220,19 +221,31 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	if amount > user.Amount {
 		return errors.New("insufficient balance")
 	}
+	timestamp := getCurrentTimestamp()
 	debitEntry := LedgerEntry{
 		AccountID:     fromAccountID,
 		Amount:        amount,
 		TransactionID: uid,
 		Type:          "debit",
-		Time:          getCurrentTimestamp(),
+		Time:          timestamp,
 	}
 	creditEntry := LedgerEntry{
 		AccountID:     toAccountID,
 		Amount:        amount,
 		TransactionID: uid,
 		Type:          "credit",
-		Time:          getCurrentTimestamp(),
+		Time:          timestamp,
+	}
+
+	// Define the transaction.
+	transaction := TransactionEntry{
+		AccountID:       fromAccountID,
+		TransactionID:   uid,
+		FromAccount:     fromAccountID,
+		ToAccount:       toAccountID,
+		Amount:          amount,
+		Comment:         "Transfer credits", // Replace with actual comment
+		TransactionDate: timestamp,
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
@@ -243,6 +256,11 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	avCredit, err := attributevalue.MarshalMap(creditEntry)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ledger entry: %v", err)
+	}
+	// Marshal the transaction into a DynamoDB attribute value map.
+	avTransaction, err := attributevalue.MarshalMap(transaction)
+	if err != nil {
+		return fmt.Errorf("failed to marshal transaction entry: %v", err)
 	}
 
 	input := &dynamodb.TransactWriteItemsInput{
@@ -279,6 +297,13 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 				TableName: aws.String(LedgerTable),
 				Item:      avCredit,
 			}}, // PUT credit
+			{
+				Put: &types.Put{
+					TableName: aws.String(TransactionsTable), // Replace with the actual name of your table
+					Item:      avTransaction,
+				},
+			}, // put transaction
+
 		},
 	}
 
@@ -326,6 +351,66 @@ func GetTransactions(dbSvc *dynamodb.Client, accountID string, limit int32, last
 	}
 
 	// If there are more items to be fetched, return the TransactionID of the last item
+	var newLastTransactionID string
+	if resp.LastEvaluatedKey != nil {
+		newLastTransactionID = resp.LastEvaluatedKey["TransactionID"].(*types.AttributeValueMemberS).Value
+	}
+
+	return transactions, newLastTransactionID, nil
+}
+
+// GetTransactions retrieves a list of transactions for a specified account.
+// It takes a DynamoDB client, an account ID, and a limit for the number of transactions
+// to retrieve. It returns a slice of TransactionEntry and an error, if any.
+func GetDetailedTransactions(dbSvc *dynamodb.Client, accountID string, limit int32) ([]TransactionEntry, error) {
+	// Query for transactions sent by the account
+	sentTransactions, _, err := getTransactionsByIndex(dbSvc, "FromAccountIndex", "FromAccount", accountID, limit, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// Query for transactions received by the account
+	receivedTransactions, _, err := getTransactionsByIndex(dbSvc, "ToAccountIndex", "ToAccount", accountID, limit, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine the transactions into a single list
+	allTransactions := append(sentTransactions, receivedTransactions...)
+
+	return allTransactions, nil
+}
+
+// getTransactionsByIndex is a helper function that queries for transactions on a specific index.
+func getTransactionsByIndex(dbSvc *dynamodb.Client, indexName string, attributeName string, accountID string, limit int32, lastTransactionID string) ([]TransactionEntry, string, error) {
+	input := &dynamodb.QueryInput{
+		TableName:              &TransactionsTable,
+		IndexName:              aws.String(indexName),
+		KeyConditionExpression: aws.String(fmt.Sprintf("%s = :accountId", attributeName)),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":accountId": &types.AttributeValueMemberS{Value: accountID},
+		},
+		Limit: aws.Int32(limit),
+	}
+
+	if lastTransactionID != "" {
+		input.ExclusiveStartKey = map[string]types.AttributeValue{
+			"AccountID":     &types.AttributeValueMemberS{Value: accountID},
+			"TransactionID": &types.AttributeValueMemberS{Value: lastTransactionID},
+		}
+	}
+
+	resp, err := dbSvc.Query(context.TODO(), input)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to fetch transactions: %v", err)
+	}
+
+	var transactions []TransactionEntry
+	err = attributevalue.UnmarshalListOfMaps(resp.Items, &transactions)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to unmarshal transactions: %v", err)
+	}
+
 	var newLastTransactionID string
 	if resp.LastEvaluatedKey != nil {
 		newLastTransactionID = resp.LastEvaluatedKey["TransactionID"].(*types.AttributeValueMemberS).Value
