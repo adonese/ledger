@@ -231,7 +231,7 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 
 	user, err := GetAccount(context.TODO(), dbSvc, fromAccountID)
 	if err != nil || user == nil {
-		saveToTransactionTable(dbSvc, transaction, transactionStatus)
+		SaveToTransactionTable(dbSvc, transaction, transactionStatus)
 		return fmt.Errorf("error in retrieving user: %v", err)
 	}
 
@@ -251,7 +251,7 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	}
 
 	if amount > user.Amount {
-		saveToTransactionTable(dbSvc, transaction, transactionStatus)
+		SaveToTransactionTable(dbSvc, transaction, transactionStatus)
 		return errors.New("insufficient balance")
 	}
 
@@ -313,13 +313,13 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	_, err = dbSvc.TransactWriteItems(context.TODO(), input)
 	if err != nil {
 		transactionStatus = 1
-		if err := saveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
+		if err := SaveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
 		return fmt.Errorf("failed to debit from balance for user %s: %v", fromAccountID, err)
 	} else {
 		transactionStatus = 0
-		if err := saveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
+		if err := SaveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
 	}
