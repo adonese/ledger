@@ -200,7 +200,7 @@ func TestGetDetailedTransactions(t *testing.T) {
 			name: "Fetch transactions for 249_ACCT_1",
 			args: args{
 				dbSvc:     _dbSvc, // Assuming _dbSvc is your DynamoDB client
-				accountID: "249_ACCT_1",
+				accountID: "0111493885",
 				limit:     4,
 			},
 			want: []TransactionEntry{
