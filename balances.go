@@ -213,14 +213,15 @@ func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
 // insufficient funds or other issues.
 func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, amount float64) error {
 	// Create a new transaction input
+
+	var transactionStatus int = 1
+
 	uid := uuid.New().String()
 	user, err := GetAccount(context.TODO(), dbSvc, fromAccountID)
 	if err != nil || user == nil {
 		return fmt.Errorf("error in retrieving user: %v", err)
 	}
-	if amount > user.Amount {
-		return errors.New("insufficient balance")
-	}
+
 	timestamp := getCurrentTimestamp()
 	debitEntry := LedgerEntry{
 		AccountID:     fromAccountID,
@@ -244,8 +245,14 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		FromAccount:     fromAccountID,
 		ToAccount:       toAccountID,
 		Amount:          amount,
-		Comment:         "Transfer credits", // Replace with actual comment
+		Comment:         "Transfer credits",
 		TransactionDate: timestamp,
+		Status:          &transactionStatus,
+	}
+
+	if amount > user.Amount {
+		saveToTransactionTable(dbSvc, transaction, transactionStatus)
+		return errors.New("insufficient balance")
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
@@ -257,7 +264,6 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	if err != nil {
 		return fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
-	var transactionStatus int = 1
 
 	input := &dynamodb.TransactWriteItemsInput{
 		TransactItems: []types.TransactWriteItem{
@@ -307,8 +313,15 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	_, err = dbSvc.TransactWriteItems(context.TODO(), input)
 	if err != nil {
 		transactionStatus = 1
-		saveToTransactionTable(dbSvc, transaction, transactionStatus)
+		if err := saveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
+			panic(err)
+		}
 		return fmt.Errorf("failed to debit from balance for user %s: %v", fromAccountID, err)
+	} else {
+		transactionStatus = 0
+		if err := saveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
+			panic(err)
+		}
 	}
 	return nil
 }

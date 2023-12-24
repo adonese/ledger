@@ -21,7 +21,7 @@ func saveToTransactionTable(dbSvc *dynamodb.Client, transaction TransactionEntry
 
 	// Define the DynamoDB transaction input
 	input := &dynamodb.PutItemInput{
-		TableName: aws.String(TransactionsTable), // Replace with the actual name of your table
+		TableName: aws.String(TransactionsTable),
 		Item:      avTransaction,
 	}
 
