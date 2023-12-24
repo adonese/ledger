@@ -379,7 +379,6 @@ func GetDetailedTransactions(dbSvc *dynamodb.Client, accountID string, limit int
 	if err != nil {
 		return nil, err
 	}
-
 	// Query for transactions received by the account
 	receivedTransactions, _, err := getTransactionsByIndex(dbSvc, "ToAccountIndex", "ToAccount", accountID, limit, "")
 	if err != nil {
@@ -401,7 +400,8 @@ func getTransactionsByIndex(dbSvc *dynamodb.Client, indexName string, attributeN
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":accountId": &types.AttributeValueMemberS{Value: accountID},
 		},
-		Limit: aws.Int32(limit),
+		Limit:            aws.Int32(limit),
+		ScanIndexForward: aws.Bool(false),
 	}
 
 	if lastTransactionID != "" {
