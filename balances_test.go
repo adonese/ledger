@@ -44,7 +44,7 @@ func Test_transferCredits(t *testing.T) {
 	}{
 
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 101}, false},
-		{"testing transfer", args{fromAccountID: "0111493885", toAccountID: "01114343493885", dbSvc: _dbSvc, amount: 10}, false},
+		{"testing transfer", args{fromAccountID: "0111493885", toAccountID: "151515", dbSvc: _dbSvc, amount: 323222121}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 151}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 120}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 32}, false},
