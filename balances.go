@@ -257,11 +257,7 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	if err != nil {
 		return fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
-	// Marshal the transaction into a DynamoDB attribute value map.
-	avTransaction, err := attributevalue.MarshalMap(transaction)
-	if err != nil {
-		return fmt.Errorf("failed to marshal transaction entry: %v", err)
-	}
+	var transactionStatus int = 1
 
 	input := &dynamodb.TransactWriteItemsInput{
 		TransactItems: []types.TransactWriteItem{
@@ -297,12 +293,12 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 				TableName: aws.String(LedgerTable),
 				Item:      avCredit,
 			}}, // PUT credit
-			{
-				Put: &types.Put{
-					TableName: aws.String(TransactionsTable), // Replace with the actual name of your table
-					Item:      avTransaction,
-				},
-			}, // put transaction
+			// {
+			// 	Put: &types.Put{
+			// 		TableName: aws.String(TransactionsTable), // Replace with the actual name of your table
+			// 		Item:      avTransaction,
+			// 	},
+			// }, // put transaction
 
 		},
 	}
@@ -310,6 +306,8 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 	// Perform the transaction
 	_, err = dbSvc.TransactWriteItems(context.TODO(), input)
 	if err != nil {
+		transactionStatus = 1
+		saveToTransactionTable(dbSvc, transaction, transactionStatus)
 		return fmt.Errorf("failed to debit from balance for user %s: %v", fromAccountID, err)
 	}
 	return nil

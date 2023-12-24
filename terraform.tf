@@ -76,7 +76,7 @@ resource "aws_dynamodb_table" "ledger_table" {
     write_capacity     = 20
     read_capacity      = 20
     projection_type    = "ALL"
-  }./
+  }
 }
 
 
@@ -86,22 +86,16 @@ resource "aws_dynamodb_table" "transactions" {
   billing_mode     = "PROVISIONED"
   read_capacity    = 20
   write_capacity   = 20
-  hash_key         = "AccountID"
-  range_key        = "TransactionDate"
+  hash_key         = "TransactionID"
 
   attribute {
-    name = "AccountID"
+    name = "TransactionID"
     type = "S"
   }
 
   attribute {
     name = "TransactionDate"
-    type = "N"  // Assuming the date is stored as a Unix timestamp
-  }
-
-  attribute {
-    name = "ToAccount"
-    type = "S"
+    type = "N" // Assuming the date is stored as a Unix timestamp
   }
 
   attribute {
@@ -109,22 +103,31 @@ resource "aws_dynamodb_table" "transactions" {
     type = "S"
   }
 
-  global_secondary_index {
-    name               = "ToAccountIndex"
-    hash_key           = "ToAccount"
-    projection_type    = "ALL"
-    read_capacity      = 20
-    write_capacity     = 20
+  attribute {
+    name = "ToAccount"
+    type = "S"
   }
 
-  global_secondary_index {
-    name               = "FromAccountIndex"
-    hash_key           = "FromAccount"
-    projection_type    = "ALL"
-    read_capacity      = 20
-    write_capacity     = 20
-  }
+global_secondary_index {
+  name               = "FromAccountIndex"
+  hash_key           = "FromAccount"
+  range_key          = "TransactionDate"
+  projection_type    = "ALL"
+  read_capacity      = 20
+  write_capacity     = 20
 }
+
+global_secondary_index {
+  name               = "ToAccountIndex"
+  hash_key           = "ToAccount"
+  range_key          = "TransactionDate"
+  projection_type    = "ALL"
+  read_capacity      = 20
+  write_capacity     = 20
+}
+}
+
+
 
 
 
