@@ -3,6 +3,8 @@ package ledger
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // SMS defines the structure for sending SMS notifications.
@@ -99,4 +101,19 @@ type TransactionEntry struct {
 	Comment         string  `dynamodbav:"Comment" json:"comment,omitempty"`
 	TransactionDate int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
 	Status          *int    `dynamodbav:"TransactionStatus" json:"status,omitempty"`
+}
+
+// Create a new transacton entry and populate it with default time and status of 1, using the current time. Should we use pointer? or use func (n *TransactionEntry) New() which us better
+func NewTransactionEntry(fromAccount, toAccount string, amount float64) TransactionEntry {
+	uid := uuid.New().String()
+	failedTransaction := 1
+	return TransactionEntry{
+		TransactionID:   uid,
+		FromAccount:     fromAccount,
+		ToAccount:       toAccount,
+		Amount:          amount,
+		Comment:         "failed",
+		TransactionDate: getCurrentTimestamp(),
+		Status:          &failedTransaction,
+	}
 }
