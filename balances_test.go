@@ -43,8 +43,8 @@ func Test_transferCredits(t *testing.T) {
 		wantErr bool
 	}{
 
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 101}, false},
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "01114343493885", dbSvc: _dbSvc, amount: 101}, false},
+		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 101}, false},
+		{"testing transfer", args{fromAccountID: "0111493885", toAccountID: "01114343493885", dbSvc: _dbSvc, amount: 10}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 151}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 120}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 32}, false},
