@@ -214,15 +214,27 @@ func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
 func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, amount float64) error {
 	// Create a new transaction input
 
+	timestamp := getCurrentTimestamp()
 	var transactionStatus int = 1
-
 	uid := uuid.New().String()
+	// Define the transaction.
+	transaction := TransactionEntry{
+		AccountID:       fromAccountID,
+		TransactionID:   uid,
+		FromAccount:     fromAccountID,
+		ToAccount:       toAccountID,
+		Amount:          amount,
+		Comment:         "Transfer credits",
+		TransactionDate: timestamp,
+		Status:          &transactionStatus,
+	}
+
 	user, err := GetAccount(context.TODO(), dbSvc, fromAccountID)
 	if err != nil || user == nil {
+		saveToTransactionTable(dbSvc, transaction, transactionStatus)
 		return fmt.Errorf("error in retrieving user: %v", err)
 	}
 
-	timestamp := getCurrentTimestamp()
 	debitEntry := LedgerEntry{
 		AccountID:     fromAccountID,
 		Amount:        amount,
@@ -236,18 +248,6 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		TransactionID: uid,
 		Type:          "credit",
 		Time:          timestamp,
-	}
-
-	// Define the transaction.
-	transaction := TransactionEntry{
-		AccountID:       fromAccountID,
-		TransactionID:   uid,
-		FromAccount:     fromAccountID,
-		ToAccount:       toAccountID,
-		Amount:          amount,
-		Comment:         "Transfer credits",
-		TransactionDate: timestamp,
-		Status:          &transactionStatus,
 	}
 
 	if amount > user.Amount {
