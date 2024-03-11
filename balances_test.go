@@ -251,10 +251,8 @@ func TestGetAllNilTransactions(t *testing.T) {
 		wantMin int // Use wantMin to specify the minimum number of results expected
 	}{
 		{
-			name: "Fetch all transactions",
-			filter: TransactionFilter{
-				Limit: 50,
-			},
+			name:    "Fetch all transactions",
+			filter:  TransactionFilter{},
 			wantMin: 28, // Adjust based on expected data in your test table
 		},
 		// {
