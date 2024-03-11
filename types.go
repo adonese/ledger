@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 )
 
@@ -116,4 +117,13 @@ func NewTransactionEntry(fromAccount, toAccount string, amount float64) Transact
 		TransactionDate: getCurrentTimestamp(),
 		Status:          &failedTransaction,
 	}
+}
+
+type TransactionFilter struct {
+	AccountID         string
+	TransactionStatus *int
+	StartTime         int64
+	EndTime           int64
+	LastEvaluatedKey  map[string]types.AttributeValue
+	Limit             int32
 }

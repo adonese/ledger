@@ -43,8 +43,8 @@ func Test_transferCredits(t *testing.T) {
 		wantErr bool
 	}{
 
-		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 101}, false},
-		{"testing transfer", args{fromAccountID: "0111493885", toAccountID: "151515", dbSvc: _dbSvc, amount: 323222121}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 1029}, false},
+		// {"testing transfer", args{fromAccountID: "0111493885", toAccountID: "151515", dbSvc: _dbSvc, amount: 323222121}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 151}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 120}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 32}, false},
@@ -105,7 +105,8 @@ func Test_createAccountWithBalance(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 121342212}, true},
+		// {"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 121342212}, true},
+		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 10}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -236,6 +237,55 @@ func TestGetDetailedTransactions(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetDetailedTransactions() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+func TestGetAllNilTransactions(t *testing.T) {
+
+	// transactionStatus := 1
+	// Define your tests
+	tests := []struct {
+		name    string
+		filter  TransactionFilter
+		wantMin int // Use wantMin to specify the minimum number of results expected
+	}{
+		{
+			name: "Fetch all transactions",
+			filter: TransactionFilter{
+				Limit: 50,
+			},
+			wantMin: 28, // Adjust based on expected data in your test table
+		},
+		// {
+		// 	name: "Fetch transactions for specific account",
+		// 	filter: TransactionFilter{
+		// 		AccountID: "exampleAccountID", // Adjust to an existing account ID in your test data
+		// 		Limit:     50,
+		// 	},
+		// 	wantMin: 1, // Ensure this account has at least one transaction
+		// },
+		// {
+		// 	name: "Fetch transactions with status",
+		// 	filter: TransactionFilter{
+		// 		TransactionStatus: &transactionStatus, // Assuming 0 represents a specific status in your data model
+		// 		Limit:             50,
+		// 	},
+		// 	wantMin: 1,
+		// },
+	}
+
+	ctx := context.TODO()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _, err := GetAllNilTransactions(ctx, _dbSvc, tt.filter)
+			if err != nil {
+				t.Errorf("GetAllNilTransactions() error = %v", err)
+				return
+			}
+			if len(got) != tt.wantMin {
+				t.Errorf("GetAllNilTransactions() got %v, want at least %v results - the result is: %+v", len(got), tt.wantMin, got)
 			}
 		})
 	}

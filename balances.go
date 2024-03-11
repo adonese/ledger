@@ -7,6 +7,7 @@ import (
 	"log"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -428,6 +429,67 @@ func getTransactionsByIndex(dbSvc *dynamodb.Client, indexName string, attributeN
 	}
 
 	return transactions, newLastTransactionID, nil
+}
+
+func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, filter TransactionFilter) ([]TransactionEntry, map[string]types.AttributeValue, error) {
+	expressionAttributeValues := map[string]types.AttributeValue{}
+	var filterExpression strings.Builder
+
+	// Only build the filter expression and set expression attribute values if needed
+	if filter.AccountID != "" {
+		filterExpression.WriteString("(FromAccount = :accountID OR ToAccount = :accountID)")
+		expressionAttributeValues[":accountID"] = &types.AttributeValueMemberS{Value: filter.AccountID}
+	}
+
+	if filter.TransactionStatus != nil {
+		if filterExpression.Len() > 0 {
+			filterExpression.WriteString(" AND ")
+		}
+		filterExpression.WriteString("TransactionStatus = :transactionStatus")
+		expressionAttributeValues[":transactionStatus"] = &types.AttributeValueMemberN{Value: strconv.Itoa(*filter.TransactionStatus)}
+	}
+
+	if filter.StartTime != 0 && filter.EndTime != 0 {
+		if filterExpression.Len() > 0 {
+			filterExpression.WriteString(" AND ")
+		}
+		filterExpression.WriteString("TransactionDate BETWEEN :startTime AND :endTime")
+		expressionAttributeValues[":startTime"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(filter.StartTime, 10)}
+		expressionAttributeValues[":endTime"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(filter.EndTime, 10)}
+	}
+
+	scanInput := &dynamodb.ScanInput{
+		TableName:         aws.String("TransactionsTable"),
+		Limit:             aws.Int32(filter.Limit),
+		ExclusiveStartKey: filter.LastEvaluatedKey,
+	}
+
+	// Only add filter expression and expression attribute values if there's actually a filter
+	if filterExpression.Len() > 0 {
+		scanInput.FilterExpression = aws.String(filterExpression.String())
+		scanInput.ExpressionAttributeValues = expressionAttributeValues
+	}
+
+	output, err := dbSvc.Scan(ctx, scanInput)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch transactions: %v", err)
+	}
+
+	var transactions []TransactionEntry
+	err = attributevalue.UnmarshalListOfMaps(output.Items, &transactions)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal transactions: %v", err)
+	}
+
+	return transactions, output.LastEvaluatedKey, nil
+}
+
+// Helper function to append filter expressions
+func addFilterExpression(existing, add string) string {
+	if existing != "" {
+		return existing + " AND " + add
+	}
+	return add
 }
 
 // Helper function to get the current timestamp
