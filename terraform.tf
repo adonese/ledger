@@ -2,8 +2,8 @@
 resource "aws_dynamodb_table" "UserBalanceTable" {
   name           = "UserBalanceTable"
   billing_mode   = "PROVISIONED"
-  read_capacity  = 20
-  write_capacity = 20
+  read_capacity  = 7
+  write_capacity = 7
   hash_key       = "AccountID"
 
   attribute {
@@ -16,8 +16,8 @@ resource "aws_dynamodb_table" "UserBalanceTable" {
 resource "aws_dynamodb_table" "NilUsersTable" {
   name           = "NilUsers"
   billing_mode   = "PROVISIONED"
-  read_capacity  = 20
-  write_capacity = 20
+  read_capacity  = 7
+  write_capacity = 7
   hash_key       = "AccountID"
 
   attribute {
@@ -54,8 +54,8 @@ provider "aws" {
 resource "aws_dynamodb_table" "ledger_table" {
   name           = "LedgerTable"
   billing_mode   = "PROVISIONED"
-  read_capacity  = 20
-  write_capacity = 20
+  read_capacity  = 7
+  write_capacity = 7
   hash_key       = "AccountID"
   range_key      = "TransactionID"  # Add this line to set TransactionID as the sort key
 
@@ -73,8 +73,8 @@ resource "aws_dynamodb_table" "ledger_table" {
   global_secondary_index {
     name               = "TransactionIndex"
     hash_key           = "TransactionID"
-    write_capacity     = 20
-    read_capacity      = 20
+    write_capacity     = 7
+    read_capacity      = 7
     projection_type    = "ALL"
   }
 }
@@ -84,8 +84,8 @@ resource "aws_dynamodb_table" "ledger_table" {
 resource "aws_dynamodb_table" "transactions" {
   name             = "TransactionsTable"
   billing_mode     = "PROVISIONED"
-  read_capacity    = 20
-  write_capacity   = 20
+  read_capacity    = 7
+  write_capacity   = 7
   hash_key         = "TransactionID"
 
   attribute {
@@ -113,8 +113,8 @@ global_secondary_index {
   hash_key           = "FromAccount"
   range_key          = "TransactionDate"
   projection_type    = "ALL"
-  read_capacity      = 20
-  write_capacity     = 20
+  read_capacity      = 7
+  write_capacity     = 7
 }
 
 global_secondary_index {
@@ -122,8 +122,8 @@ global_secondary_index {
   hash_key           = "ToAccount"
   range_key          = "TransactionDate"
   projection_type    = "ALL"
-  read_capacity      = 20
-  write_capacity     = 20
+  read_capacity      = 7
+  write_capacity     = 7
 }
 }
 
