@@ -461,6 +461,9 @@ func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, filter T
 		expressionAttributeValues[":endTime"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(filter.EndTime, 10)}
 	}
 
+	if filter.Limit == 0 {
+		filter.Limit = 25
+	}
 	scanInput := &dynamodb.ScanInput{
 		TableName: aws.String("TransactionsTable"),
 		Limit:     aws.Int32(filter.Limit),
