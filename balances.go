@@ -432,11 +432,14 @@ func getTransactionsByIndex(dbSvc *dynamodb.Client, indexName string, attributeN
 }
 
 func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, filter TransactionFilter) ([]TransactionEntry, map[string]types.AttributeValue, error) {
-	expressionAttributeValues := map[string]types.AttributeValue{}
 	var filterExpression strings.Builder
+	expressionAttributeValues := map[string]types.AttributeValue{}
 
-	// Only build the filter expression and set expression attribute values if needed
+	// Building filter expressions
 	if filter.AccountID != "" {
+		if filterExpression.Len() > 0 {
+			filterExpression.WriteString(" AND ")
+		}
 		filterExpression.WriteString("(FromAccount = :accountID OR ToAccount = :accountID)")
 		expressionAttributeValues[":accountID"] = &types.AttributeValueMemberS{Value: filter.AccountID}
 	}
@@ -459,15 +462,18 @@ func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, filter T
 	}
 
 	scanInput := &dynamodb.ScanInput{
-		TableName:         aws.String("TransactionsTable"),
-		Limit:             aws.Int32(filter.Limit),
-		ExclusiveStartKey: filter.LastEvaluatedKey,
+		TableName: aws.String("TransactionsTable"),
+		Limit:     aws.Int32(filter.Limit),
 	}
 
-	// Only add filter expression and expression attribute values if there's actually a filter
+	// Only set the FilterExpression and ExpressionAttributeValues if filters are present
 	if filterExpression.Len() > 0 {
 		scanInput.FilterExpression = aws.String(filterExpression.String())
 		scanInput.ExpressionAttributeValues = expressionAttributeValues
+	}
+
+	if len(filter.LastEvaluatedKey) > 0 {
+		scanInput.ExclusiveStartKey = filter.LastEvaluatedKey
 	}
 
 	output, err := dbSvc.Scan(ctx, scanInput)
