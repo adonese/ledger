@@ -98,7 +98,7 @@ type TransactionEntry struct {
 	TransactionID   string  `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
 	FromAccount     string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
 	ToAccount       string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
-	Amount          float64 `dynamodbav:"Amount" json:"amount,omitempty"`
+	Amount          float64 `dynamodbav:"Amount" json:"amount"`
 	Comment         string  `dynamodbav:"Comment" json:"comment,omitempty"`
 	TransactionDate int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
 	Status          *int    `dynamodbav:"TransactionStatus" json:"status,omitempty"`
