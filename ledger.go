@@ -67,6 +67,7 @@ type LedgerEntry struct {
 	Type          string  `dynamodbav:"Type" json:"type,omitempty"`
 	Time          int64   `dynamodbav:"Time" json:"time,omitempty"`
 	TenantID      string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
+	InitiatorUUID string  `dynamodbav:"UUID" json:"uuid,omitempty"`
 }
 
 func test() {

@@ -106,6 +106,7 @@ type TransactionEntry struct {
 	TransactionDate int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
 	Status          *int    `dynamodbav:"TransactionStatus" json:"status,omitempty"`
 	TenantID        string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
+	InitiatorUUID   string  `dynamodbav:"UUID" json:"uuid,omitempty"`
 }
 
 // Create a new transacton entry and populate it with default time and status of 1, using the current time. Should we use pointer? or use func (n *TransactionEntry) New() which us better

@@ -260,6 +260,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 		Comment:         "Transfer credits",
 		TransactionDate: timestamp,
 		Status:          &transactionStatus,
+		InitiatorUUID:   trEntry.InitiatorUUID,
 	}
 
 	user, err := GetAccount(context.TODO(), dbSvc, trEntry)
@@ -280,6 +281,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 		TransactionID: uid,
 		Type:          "debit",
 		Time:          timestamp,
+		InitiatorUUID: trEntry.InitiatorUUID,
 	}
 	creditEntry := LedgerEntry{
 		TenantID:      trEntry.TenantID,
@@ -288,6 +290,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 		TransactionID: uid,
 		Type:          "credit",
 		Time:          timestamp,
+		InitiatorUUID: trEntry.InitiatorUUID,
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map

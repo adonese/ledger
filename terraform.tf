@@ -108,6 +108,11 @@ name           = "LedgerTable"
     type = "S"
   }
 
+    attribute {
+    name = "UUID"
+    type = "S"
+  }
+
   attribute {
     name = "TransactionID"
     type = "S"
@@ -117,6 +122,15 @@ name           = "LedgerTable"
     name               = "TransactionIndex"
     hash_key           = "TenantID"
     range_key          = "TransactionID"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+    global_secondary_index {
+    name               = "UserUUIDIndex"
+    hash_key           = "TenantID"
+    range_key          = "UUID"
     projection_type    = "ALL"
     read_capacity      = 7
     write_capacity     = 7
@@ -135,6 +149,11 @@ resource "aws_dynamodb_table" "transactions" {
 
   attribute {
     name = "TenantID"
+    type = "S"
+  }
+
+    attribute {
+    name = "UUID"
     type = "S"
   }
 
@@ -180,6 +199,15 @@ resource "aws_dynamodb_table" "transactions" {
     name               = "TransactionDateIndex"
     hash_key           = "TenantID"
     range_key          = "TransactionDate"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+    global_secondary_index {
+    name               = "UserUUIDIndec"
+    hash_key           = "TenantID"
+    range_key          = "UUID"
     projection_type    = "ALL"
     read_capacity      = 7
     write_capacity     = 7
