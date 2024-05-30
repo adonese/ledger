@@ -3,25 +3,72 @@ resource "aws_dynamodb_table" "UserBalanceTable" {
   billing_mode   = "PROVISIONED"
   read_capacity  = 7
   write_capacity = 7
-  hash_key       = "AccountID"
+  hash_key       = "TenantID"
+  range_key      = "AccountID"
+
+  attribute {
+    name = "TenantID"
+    type = "S"
+  }
 
   attribute {
     name = "AccountID"
     type = "S"
   }
+
+  global_secondary_index {
+    name               = "UserIndex"
+    hash_key           = "AccountID"
+    range_key          = "TenantID"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
 }
 
 
+
 resource "aws_dynamodb_table" "NilUsersTable" {
-  name           = "NilUsers"
+name           = "NilUsers"
   billing_mode   = "PROVISIONED"
   read_capacity  = 7
   write_capacity = 7
-  hash_key       = "AccountID"
+  hash_key       = "TenantID"
+  range_key      = "AccountID"
+
+  attribute {
+    name = "TenantID"
+    type = "S"
+  }
 
   attribute {
     name = "AccountID"
     type = "S"
+  }
+
+  attribute {
+    name = "Email"
+    type = "S"
+  }
+
+  // Global Secondary Index on Email
+  global_secondary_index {
+    name               = "EmailIndex"
+    hash_key           = "Email"
+    range_key          = "TenantID"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+  // Global Secondary Index on Username
+  global_secondary_index {
+    name               = "UsernameIndex"
+    hash_key           = "AccountID"
+    range_key          = "TenantID"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
   }
 }
 
@@ -30,8 +77,6 @@ resource "aws_dynamodb_table" "NilUsersTable" {
 resource "aws_ses_domain_identity" "example" {
   domain = "pynil.com"
 }
-
-
 
 
 terraform {
@@ -51,15 +96,15 @@ provider "aws" {
 
 
 resource "aws_dynamodb_table" "ledger_table" {
-  name           = "LedgerTable"
+name           = "LedgerTable"
   billing_mode   = "PROVISIONED"
   read_capacity  = 7
   write_capacity = 7
-  hash_key       = "AccountID"
-  range_key      = "TransactionID"  # Add this line to set TransactionID as the sort key
+  hash_key       = "TenantID"
+  range_key      = "TransactionID"
 
   attribute {
-    name = "AccountID"
+    name = "TenantID"
     type = "S"
   }
 
@@ -68,13 +113,13 @@ resource "aws_dynamodb_table" "ledger_table" {
     type = "S"
   }
 
-  # Adjust your GSI as needed. Depending on your access patterns, you might not need it anymore
   global_secondary_index {
     name               = "TransactionIndex"
-    hash_key           = "TransactionID"
-    write_capacity     = 7
-    read_capacity      = 7
+    hash_key           = "TenantID"
+    range_key          = "TransactionID"
     projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
   }
 }
 
@@ -85,7 +130,13 @@ resource "aws_dynamodb_table" "transactions" {
   billing_mode     = "PROVISIONED"
   read_capacity    = 7
   write_capacity   = 7
-  hash_key         = "TransactionID"
+  hash_key         = "TenantID"
+  range_key        = "TransactionID"
+
+  attribute {
+    name = "TenantID"
+    type = "S"
+  }
 
   attribute {
     name = "TransactionID"
@@ -94,7 +145,7 @@ resource "aws_dynamodb_table" "transactions" {
 
   attribute {
     name = "TransactionDate"
-    type = "N" // Assuming the date is stored as a Unix timestamp
+    type = "N"
   }
 
   attribute {
@@ -107,23 +158,32 @@ resource "aws_dynamodb_table" "transactions" {
     type = "S"
   }
 
-global_secondary_index {
-  name               = "FromAccountIndex"
-  hash_key           = "FromAccount"
-  range_key          = "TransactionDate"
-  projection_type    = "ALL"
-  read_capacity      = 7
-  write_capacity     = 7
-}
+  global_secondary_index {
+    name               = "FromAccountIndex"
+    hash_key           = "TenantID"
+    range_key          = "FromAccount"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
 
-global_secondary_index {
-  name               = "ToAccountIndex"
-  hash_key           = "ToAccount"
-  range_key          = "TransactionDate"
-  projection_type    = "ALL"
-  read_capacity      = 7
-  write_capacity     = 7
-}
+  global_secondary_index {
+    name               = "ToAccountIndex"
+    hash_key           = "TenantID"
+    range_key          = "ToAccount"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+  global_secondary_index {
+    name               = "TransactionDateIndex"
+    hash_key           = "TenantID"
+    range_key          = "TransactionDate"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
 }
 
 
@@ -146,73 +206,73 @@ global_secondary_index {
 
 
 # Create an S3 bucket
-resource "aws_s3_bucket" "image_bucket" {
-  bucket = "nil-kyc"
-  acl    = "private"
+# resource "aws_s3_bucket" "image_bucket" {
+#   bucket = "nil-kyc"
+#   acl    = "private"
 
-  versioning {
-    enabled = true
-  }
+#   versioning {
+#     enabled = true
+#   }
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-}
+#   server_side_encryption_configuration {
+#     rule {
+#       apply_server_side_encryption_by_default {
+#         sse_algorithm = "AES256"
+#       }
+#     }
+#   }
+# }
 
-# Create an IAM user for accessing the bucket
-resource "aws_iam_user" "image_user" {
-  name = "image-user"
-}
+# # Create an IAM user for accessing the bucket
+# resource "aws_iam_user" "image_user" {
+#   name = "image-user"
+# }
 
-# Create an IAM access key for the user
-resource "aws_iam_access_key" "image_user_key" {
-  user = aws_iam_user.image_user.name
-}
+# # Create an IAM access key for the user
+# resource "aws_iam_access_key" "image_user_key" {
+#   user = aws_iam_user.image_user.name
+# }
 
-# Create an IAM policy for the user
-resource "aws_iam_user_policy" "image_user_policy" {
-  name = "image-user-policy"
-  user = aws_iam_user.image_user.name
+# # Create an IAM policy for the user
+# resource "aws_iam_user_policy" "image_user_policy" {
+#   name = "image-user-policy"
+#   user = aws_iam_user.image_user.name
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Effect   = "Allow"
-        Resource = [
-          "${aws_s3_bucket.image_bucket.arn}",
-          "${aws_s3_bucket.image_bucket.arn}/*"
-        ]
-      }
-    ]
-  })
-}
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Action = [
+#           "s3:PutObject",
+#           "s3:GetObject",
+#           "s3:ListBucket"
+#         ]
+#         Effect   = "Allow"
+#         Resource = [
+#           "${aws_s3_bucket.image_bucket.arn}",
+#           "${aws_s3_bucket.image_bucket.arn}/*"
+#         ]
+#       }
+#     ]
+#   })
+# }
 
-# Output the access key and secret key
-output "access_key" {
-  value = aws_iam_access_key.image_user_key.id
-}
+# # Output the access key and secret key
+# output "access_key" {
+#   value = aws_iam_access_key.image_user_key.id
+# }
 
-output "secret_key" {
-  value     = aws_iam_access_key.image_user_key.secret
-  sensitive = true
-}
+# output "secret_key" {
+#   value     = aws_iam_access_key.image_user_key.secret
+#   sensitive = true
+# }
 
 
-# Write the access key and secret key to a file
-resource "local_file" "credentials" {
-  content  = <<-EOT
-    ACCESS_KEY=${aws_iam_access_key.image_user_key.id}
-    SECRET_KEY=${aws_iam_access_key.image_user_key.secret}
-  EOT
-  filename = "credentials.txt"
-}
+# # Write the access key and secret key to a file
+# resource "local_file" "credentials" {
+#   content  = <<-EOT
+#     ACCESS_KEY=${aws_iam_access_key.image_user_key.id}
+#     SECRET_KEY=${aws_iam_access_key.image_user_key.secret}
+#   EOT
+#   filename = "credentials.txt"
+# }

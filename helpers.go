@@ -10,8 +10,9 @@ import (
 )
 
 // The StoreTransaction function stores the details of a transaction
-func SaveToTransactionTable(dbSvc *dynamodb.Client, transaction TransactionEntry, status int) error {
+func SaveToTransactionTable(dbSvc *dynamodb.Client, tenantId string, transaction TransactionEntry, status int) error {
 	transaction.Status = &status
+	transaction.TenantID = tenantId
 
 	// Marshal the transaction into a DynamoDB attribute value map
 	avTransaction, err := attributevalue.MarshalMap(transaction)

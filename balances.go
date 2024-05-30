@@ -43,13 +43,17 @@ type UserBalance struct {
 // CheckUsersExist checks if the provided account IDs exist in the DynamoDB table.
 // It takes a DynamoDB client and a slice of account IDs and returns a slice of
 // non-existent account IDs and an error, if any.
-func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, error) {
+func CheckUsersExist(dbSvc *dynamodb.Client, tenantId string, accountIds []string) ([]string, error) {
 	// Prepare the input for the BatchGetItem operation
+	if tenantId == "" {
+		tenantId = "nil"
+	}
 	keys := make([]map[string]types.AttributeValue, len(accountIds))
 	var err error
 	for i, accountId := range accountIds {
 		keys[i] = map[string]types.AttributeValue{
 			"AccountID": &types.AttributeValueMemberS{Value: accountId},
+			"TenantID":  &types.AttributeValueMemberS{Value: tenantId},
 		}
 	}
 	input := &dynamodb.BatchGetItemInput{
@@ -87,9 +91,13 @@ func CheckUsersExist(dbSvc *dynamodb.Client, accountIds []string) ([]string, err
 // CreateAccountWithBalance creates a new user account with an initial balance.
 // It takes a DynamoDB client, an account ID, and an amount to be set as the initial
 // balance. It returns an error if the account creation fails.
-func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount float64) error {
-	// parse float to string
-
+//
+// FIXME(adonese): currently this creates a destructive operation where it overrides an existing user.
+// the only way we're yet allowing this, is because the logic is managed via another indirection layer.
+func CreateAccountWithBalance(dbSvc *dynamodb.Client, tenantId, accountId string, amount float64) error {
+	if tenantId == "" {
+		tenantId = "nil" // default value for old clients
+	}
 	item := map[string]types.AttributeValue{
 		"AccountID":           &types.AttributeValueMemberS{Value: accountId},
 		"full_name":           &types.AttributeValueMemberS{Value: "test-account"},
@@ -110,12 +118,16 @@ func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount f
 		"amount":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
 		"currency":            &types.AttributeValueMemberS{Value: "SDG"},
 		"Version":             &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
+		"TenantID":            &types.AttributeValueMemberS{Value: tenantId},
 	}
+
+	conditionExpression := "attribute_not_exists(AccountID) AND attribute_not_exists(TenantID)"
 
 	// Put the item into the DynamoDB table
 	input := &dynamodb.PutItemInput{
-		TableName: aws.String(NilUsers),
-		Item:      item,
+		TableName:           aws.String(NilUsers),
+		Item:                item,
+		ConditionExpression: &conditionExpression,
 	}
 
 	_, err := dbSvc.PutItem(context.TODO(), input)
@@ -123,7 +135,10 @@ func CreateAccountWithBalance(dbSvc *dynamodb.Client, accountId string, amount f
 	return err
 }
 
-func CreateAccount(dbSvc *dynamodb.Client, user User) error {
+func CreateAccount(dbSvc *dynamodb.Client, tenantId string, user User) error {
+	if tenantId == "" {
+		tenantId = "nil"
+	}
 	item := map[string]types.AttributeValue{
 		"AccountID":           &types.AttributeValueMemberS{Value: user.AccountID},
 		"full_name":           &types.AttributeValueMemberS{Value: user.FullName},
@@ -144,6 +159,7 @@ func CreateAccount(dbSvc *dynamodb.Client, user User) error {
 		"amount":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", user.Amount)},
 		"currency":            &types.AttributeValueMemberS{Value: "SDG"},
 		"Version":             &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
+		"TenantID":            &types.AttributeValueMemberS{Value: tenantId},
 	}
 
 	// Put the item into the DynamoDB table
@@ -157,40 +173,49 @@ func CreateAccount(dbSvc *dynamodb.Client, user User) error {
 	return err
 }
 
-func GetAccount(ctx context.Context, dbSvc *dynamodb.Client, accountID string) (*User, error) {
+// GetAccount retrieves an account by tenant ID and account ID.
+func GetAccount(ctx context.Context, dbSvc *dynamodb.Client, tenantID, accountID string) (*User, error) {
+	if tenantID == "" {
+		tenantID = "nil"
+	}
 	key := map[string]types.AttributeValue{
+		"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
 		"AccountID": &types.AttributeValueMemberS{Value: accountID},
 	}
 
-	out, err := dbSvc.GetItem(ctx, &dynamodb.GetItemInput{
-		TableName: aws.String(NilUsers),
+	result, err := dbSvc.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String("NilUsers"),
 		Key:       key,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get item: %v", err)
+		return nil, err
 	}
 
-	if out.Item == nil {
-		return nil, fmt.Errorf("account not found: %s", accountID)
+	if result.Item == nil {
+		return nil, errors.New("uncaught error: empty user!")
 	}
 
-	var account User
-	err = attributevalue.UnmarshalMap(out.Item, &account)
+	var user User
+	err = attributevalue.UnmarshalMap(result.Item, &user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal item: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal user: %v", err)
 	}
 
-	return &account, nil
+	return &user, nil
 }
 
 // InquireBalance inquires the balance of a given user account.
 // It takes a DynamoDB client and an account ID, returning the balance
 // as a float64 and an error if the inquiry fails or the user does not exist.
-func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
+func InquireBalance(dbSvc *dynamodb.Client, tenantId, AccountID string) (float64, error) {
+	if tenantId == "" {
+		tenantId = "nil"
+	}
 	result, err := dbSvc.GetItem(context.TODO(), &dynamodb.GetItemInput{
 		TableName: aws.String(NilUsers),
 		Key: map[string]types.AttributeValue{
 			"AccountID": &types.AttributeValueMemberS{Value: AccountID},
+			"TenantID":  &types.AttributeValueMemberS{Value: tenantId},
 		},
 	})
 	if err != nil {
@@ -212,14 +237,14 @@ func InquireBalance(dbSvc *dynamodb.Client, AccountID string) (float64, error) {
 // It takes a DynamoDB client, the account IDs for the sender and receiver, and
 // the amount to transfer. It returns an error if the transfer fails due to
 // insufficient funds or other issues.
-func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, amount float64) error {
-	// Create a new transaction input
-
+func TransferCredits(dbSvc *dynamodb.Client, tenantID, fromAccountID, toAccountID string, amount float64) error {
 	timestamp := getCurrentTimestamp()
 	var transactionStatus int = 1
 	uid := uuid.New().String()
-	// Define the transaction.
+
+	// Define the transaction
 	transaction := TransactionEntry{
+		TenantID:        tenantID,
 		AccountID:       fromAccountID,
 		TransactionID:   uid,
 		FromAccount:     fromAccountID,
@@ -230,13 +255,19 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		Status:          &transactionStatus,
 	}
 
-	user, err := GetAccount(context.TODO(), dbSvc, fromAccountID)
+	user, err := GetAccount(context.TODO(), dbSvc, tenantID, fromAccountID)
 	if err != nil || user == nil {
-		SaveToTransactionTable(dbSvc, transaction, transactionStatus)
+		SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus)
 		return fmt.Errorf("error in retrieving user: %v", err)
 	}
 
+	if amount > user.Amount {
+		SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus)
+		return errors.New("insufficient balance")
+	}
+
 	debitEntry := LedgerEntry{
+		TenantID:      tenantID,
 		AccountID:     fromAccountID,
 		Amount:        amount,
 		TransactionID: uid,
@@ -244,16 +275,12 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		Time:          timestamp,
 	}
 	creditEntry := LedgerEntry{
+		TenantID:      tenantID,
 		AccountID:     toAccountID,
 		Amount:        amount,
 		TransactionID: uid,
 		Type:          "credit",
 		Time:          timestamp,
-	}
-
-	if amount > user.Amount {
-		SaveToTransactionTable(dbSvc, transaction, transactionStatus)
-		return errors.New("insufficient balance")
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map
@@ -266,76 +293,118 @@ func TransferCredits(dbSvc *dynamodb.Client, fromAccountID, toAccountID string, 
 		return fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
 
-	input := &dynamodb.TransactWriteItemsInput{
+	// Perform the debit transaction
+	debitInput := &dynamodb.TransactWriteItemsInput{
 		TransactItems: []types.TransactWriteItem{
 			{
 				Update: &types.Update{
 					TableName: aws.String(NilUsers),
 					Key: map[string]types.AttributeValue{
+						"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
 						"AccountID": &types.AttributeValueMemberS{Value: fromAccountID},
 					},
 					UpdateExpression:    aws.String("SET amount = amount - :amount, Version = :newVersion"),
 					ConditionExpression: aws.String("attribute_not_exists(Version) OR Version = :oldVersion"),
-					ExpressionAttributeValues: map[string]types.AttributeValue{":amount": &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+					ExpressionAttributeValues: map[string]types.AttributeValue{
+						":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
 						":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(user.Version, 10)},
-						":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)}},
-				},
-			},
-			{
-				Update: &types.Update{
-					TableName: aws.String(NilUsers),
-					Key: map[string]types.AttributeValue{
-						"AccountID": &types.AttributeValueMemberS{Value: toAccountID},
+						":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
 					},
-					UpdateExpression: aws.String("SET amount = amount + :amount, Version = :newVersion"),
-					ExpressionAttributeValues: map[string]types.AttributeValue{":amount": &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
-						":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)}},
 				},
 			},
 			{Put: &types.Put{
 				TableName: aws.String(LedgerTable),
 				Item:      avDebit,
 			}}, // PUT debit
-			{Put: &types.Put{
-				TableName: aws.String(LedgerTable),
-				Item:      avCredit,
-			}}, // PUT credit
-			// {
-			// 	Put: &types.Put{
-			// 		TableName: aws.String(TransactionsTable), // Replace with the actual name of your table
-			// 		Item:      avTransaction,
-			// 	},
-			// }, // put transaction
-
 		},
 	}
 
-	// Perform the transaction
-	_, err = dbSvc.TransactWriteItems(context.TODO(), input)
+	_, err = dbSvc.TransactWriteItems(context.TODO(), debitInput)
 	if err != nil {
 		transactionStatus = 1
-		if err := SaveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
+		if err := SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
 		return fmt.Errorf("failed to debit from balance for user %s: %v", fromAccountID, err)
-	} else {
-		transactionStatus = 0
-		if err := SaveToTransactionTable(dbSvc, transaction, transactionStatus); err != nil {
+	}
+
+	// Perform the credit transaction
+	creditInput := &dynamodb.TransactWriteItemsInput{
+		TransactItems: []types.TransactWriteItem{
+			{
+				Update: &types.Update{
+					TableName: aws.String(NilUsers),
+					Key: map[string]types.AttributeValue{
+						"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
+						"AccountID": &types.AttributeValueMemberS{Value: toAccountID},
+					},
+					UpdateExpression:    aws.String("SET amount = amount + :amount, Version = :newVersion"),
+					ConditionExpression: aws.String("attribute_exists(AccountID) AND TenantID = :tenantID"),
+					ExpressionAttributeValues: map[string]types.AttributeValue{
+						":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+						":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
+						":tenantID":   &types.AttributeValueMemberS{Value: tenantID},
+					},
+				},
+			},
+			{Put: &types.Put{
+				TableName: aws.String(LedgerTable),
+				Item:      avCredit,
+			}},
+		},
+	}
+
+	_, err = dbSvc.TransactWriteItems(context.TODO(), creditInput)
+	if err != nil {
+		// Rollback debit if credit fails
+		rollbackInput := &dynamodb.UpdateItemInput{
+			TableName: aws.String(NilUsers),
+			Key: map[string]types.AttributeValue{
+				"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
+				"AccountID": &types.AttributeValueMemberS{Value: fromAccountID},
+			},
+			UpdateExpression:    aws.String("SET amount = amount + :amount, Version = :newVersion"),
+			ConditionExpression: aws.String("attribute_not_exists(Version) OR Version = :oldVersion"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+				":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(user.Version, 10)},
+				":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
+			},
+		}
+
+		_, rollbackErr := dbSvc.UpdateItem(context.TODO(), rollbackInput)
+		if rollbackErr != nil {
+			panic(fmt.Errorf("failed to rollback debit for user %s: %v", fromAccountID, rollbackErr))
+		}
+
+		transactionStatus = 1
+		if err := SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
+		return fmt.Errorf("failed to credit to balance for user %s: %v", toAccountID, err)
 	}
+
+	transactionStatus = 0
+	if err := SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus); err != nil {
+		panic(err)
+	}
+
 	return nil
 }
 
-// GetTransactions retrieves a list of transactions for a specified account.
-// It takes a DynamoDB client, an account ID, a limit for the number of transactions
+// GetTransactions retrieves a list of transactions for a specified tenant and account.
+// It takes a DynamoDB client, a tenant ID, an account ID, a limit for the number of transactions
 // to retrieve, and an optional lastTransactionID for pagination.
 // It returns a slice of LedgerEntry, the ID of the last transaction, and an error, if any.
-func GetTransactions(dbSvc *dynamodb.Client, accountID string, limit int32, lastTransactionID string) ([]LedgerEntry, string, error) {
+func GetTransactions(dbSvc *dynamodb.Client, tenantID, accountID string, limit int32, lastTransactionID string) ([]LedgerEntry, string, error) {
+	if tenantID == "" {
+		tenantID = "nil"
+	}
 	input := &dynamodb.QueryInput{
-		TableName:              aws.String("LedgerTable"),
-		KeyConditionExpression: aws.String("AccountID = :accountId"),
+		TableName:              aws.String("TransactionsTable"),
+		KeyConditionExpression: aws.String("TenantID = :tenantId AND AccountID = :accountId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":tenantId":  &types.AttributeValueMemberS{Value: tenantID},
 			":accountId": &types.AttributeValueMemberS{Value: accountID},
 		},
 		Limit: aws.Int32(limit),
@@ -344,7 +413,7 @@ func GetTransactions(dbSvc *dynamodb.Client, accountID string, limit int32, last
 	// If a lastTransactionID was provided, include it in the input
 	if lastTransactionID != "" {
 		input.ExclusiveStartKey = map[string]types.AttributeValue{
-			"AccountID":     &types.AttributeValueMemberS{Value: accountID},
+			"TenantID":      &types.AttributeValueMemberS{Value: tenantID},
 			"TransactionID": &types.AttributeValueMemberS{Value: lastTransactionID},
 		}
 	}
@@ -371,17 +440,20 @@ func GetTransactions(dbSvc *dynamodb.Client, accountID string, limit int32, last
 	return transactions, newLastTransactionID, nil
 }
 
-// GetTransactions retrieves a list of transactions for a specified account.
-// It takes a DynamoDB client, an account ID, and a limit for the number of transactions
+// GetDetailedTransactions retrieves a list of transactions for a specified tenant and account.
+// It takes a DynamoDB client, a tenant ID, an account ID, and a limit for the number of transactions
 // to retrieve. It returns a slice of TransactionEntry and an error, if any.
-func GetDetailedTransactions(dbSvc *dynamodb.Client, accountID string, limit int32) ([]TransactionEntry, error) {
+func GetDetailedTransactions(dbSvc *dynamodb.Client, tenantID, accountID string, limit int32) ([]TransactionEntry, error) {
 	// Query for transactions sent by the account
-	sentTransactions, _, err := getTransactionsByIndex(dbSvc, "FromAccountIndex", "FromAccount", accountID, limit, "")
+	if tenantID == "" {
+		tenantID = "nil"
+	}
+	sentTransactions, _, err := getTransactionsByIndex(dbSvc, tenantID, "FromAccountIndex", "FromAccount", accountID, limit, "")
 	if err != nil {
 		return nil, err
 	}
 	// Query for transactions received by the account
-	receivedTransactions, _, err := getTransactionsByIndex(dbSvc, "ToAccountIndex", "ToAccount", accountID, limit, "")
+	receivedTransactions, _, err := getTransactionsByIndex(dbSvc, tenantID, "ToAccountIndex", "ToAccount", accountID, limit, "")
 	if err != nil {
 		return nil, err
 	}
@@ -393,12 +465,16 @@ func GetDetailedTransactions(dbSvc *dynamodb.Client, accountID string, limit int
 }
 
 // getTransactionsByIndex is a helper function that queries for transactions on a specific index.
-func getTransactionsByIndex(dbSvc *dynamodb.Client, indexName string, attributeName string, accountID string, limit int32, lastTransactionID string) ([]TransactionEntry, string, error) {
+func getTransactionsByIndex(dbSvc *dynamodb.Client, tenantID, indexName, attributeName, accountID string, limit int32, lastTransactionID string) ([]TransactionEntry, string, error) {
+	if tenantID == "" {
+		tenantID = "nil"
+	}
 	input := &dynamodb.QueryInput{
-		TableName:              &TransactionsTable,
+		TableName:              aws.String("TransactionsTable"),
 		IndexName:              aws.String(indexName),
-		KeyConditionExpression: aws.String(fmt.Sprintf("%s = :accountId", attributeName)),
+		KeyConditionExpression: aws.String("TenantID = :tenantId AND " + attributeName + " = :accountId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":tenantId":  &types.AttributeValueMemberS{Value: tenantID},
 			":accountId": &types.AttributeValueMemberS{Value: accountID},
 		},
 		Limit:            aws.Int32(limit),
@@ -407,7 +483,7 @@ func getTransactionsByIndex(dbSvc *dynamodb.Client, indexName string, attributeN
 
 	if lastTransactionID != "" {
 		input.ExclusiveStartKey = map[string]types.AttributeValue{
-			"AccountID":     &types.AttributeValueMemberS{Value: accountID},
+			"TenantID":      &types.AttributeValueMemberS{Value: tenantID},
 			"TransactionID": &types.AttributeValueMemberS{Value: lastTransactionID},
 		}
 	}
@@ -431,32 +507,31 @@ func getTransactionsByIndex(dbSvc *dynamodb.Client, indexName string, attributeN
 	return transactions, newLastTransactionID, nil
 }
 
-func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, filter TransactionFilter) ([]TransactionEntry, map[string]types.AttributeValue, error) {
+func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, tenantId string, filter TransactionFilter) ([]TransactionEntry, map[string]types.AttributeValue, error) {
+
+	if tenantId == "" {
+		tenantId = "nil"
+	}
 	var filterExpression strings.Builder
 	expressionAttributeValues := map[string]types.AttributeValue{}
 
+	// Add TenantID to filter expression
+	filterExpression.WriteString("TenantID = :tenantId")
+	expressionAttributeValues[":tenantId"] = &types.AttributeValueMemberS{Value: tenantId}
+
 	// Building filter expressions
 	if filter.AccountID != "" {
-		if filterExpression.Len() > 0 {
-			filterExpression.WriteString(" AND ")
-		}
-		filterExpression.WriteString("(FromAccount = :accountID OR ToAccount = :accountID)")
+		filterExpression.WriteString(" AND (FromAccount = :accountID OR ToAccount = :accountID)")
 		expressionAttributeValues[":accountID"] = &types.AttributeValueMemberS{Value: filter.AccountID}
 	}
 
 	if filter.TransactionStatus != nil {
-		if filterExpression.Len() > 0 {
-			filterExpression.WriteString(" AND ")
-		}
-		filterExpression.WriteString("TransactionStatus = :transactionStatus")
+		filterExpression.WriteString(" AND TransactionStatus = :transactionStatus")
 		expressionAttributeValues[":transactionStatus"] = &types.AttributeValueMemberN{Value: strconv.Itoa(*filter.TransactionStatus)}
 	}
 
 	if filter.StartTime != 0 && filter.EndTime != 0 {
-		if filterExpression.Len() > 0 {
-			filterExpression.WriteString(" AND ")
-		}
-		filterExpression.WriteString("TransactionDate BETWEEN :startTime AND :endTime")
+		filterExpression.WriteString(" AND TransactionDate BETWEEN :startTime AND :endTime")
 		expressionAttributeValues[":startTime"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(filter.StartTime, 10)}
 		expressionAttributeValues[":endTime"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(filter.EndTime, 10)}
 	}
@@ -464,15 +539,12 @@ func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, filter T
 	if filter.Limit == 0 {
 		filter.Limit = 25
 	}
-	scanInput := &dynamodb.ScanInput{
-		TableName: aws.String("TransactionsTable"),
-		Limit:     aws.Int32(filter.Limit),
-	}
 
-	// Only set the FilterExpression and ExpressionAttributeValues if filters are present
-	if filterExpression.Len() > 0 {
-		scanInput.FilterExpression = aws.String(filterExpression.String())
-		scanInput.ExpressionAttributeValues = expressionAttributeValues
+	scanInput := &dynamodb.ScanInput{
+		TableName:                 aws.String("TransactionsTable"),
+		Limit:                     aws.Int32(filter.Limit),
+		FilterExpression:          aws.String(filterExpression.String()),
+		ExpressionAttributeValues: expressionAttributeValues,
 	}
 
 	if len(filter.LastEvaluatedKey) > 0 {

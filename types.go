@@ -49,9 +49,11 @@ type User struct {
 	Currency          string  `dynamodbav:"currency" json:"currency,omitempty"`
 	Version           int64   `dynamodbav:"Version" json:"version,omitempty"`
 	PublicKey         string  `json:"public_key,omitempty"`
+	TenantID          string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
+	Email             string  `dynamodbav:"Email" json:"email,omitempty"`
 }
 
-func NewDefaultAccount(accountId, mobileNumber, name, pubkey string) User {
+func NewDefaultAccount(accountId, mobileNumber, name, pubkey, tenantId string) User {
 	return User{
 		AccountID:         accountId,
 		FullName:          name,
@@ -71,6 +73,7 @@ func NewDefaultAccount(accountId, mobileNumber, name, pubkey string) User {
 		PicIDCard:         "",
 		Amount:            0,
 		Currency:          "SDG",
+		TenantID:          tenantId,
 	}
 }
 
@@ -102,6 +105,7 @@ type TransactionEntry struct {
 	Comment         string  `dynamodbav:"Comment" json:"comment,omitempty"`
 	TransactionDate int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
 	Status          *int    `dynamodbav:"TransactionStatus" json:"status,omitempty"`
+	TenantID        string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
 }
 
 // Create a new transacton entry and populate it with default time and status of 1, using the current time. Should we use pointer? or use func (n *TransactionEntry) New() which us better

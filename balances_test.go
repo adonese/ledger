@@ -2,15 +2,37 @@ package ledger
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"os"
 	"reflect"
 	"testing"
 
+	_ "embed"
+
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/stretchr/testify/mock"
 )
+
+type _ledgerSecrets struct {
+	AccessKey string `json:"AWS_ACCESS_KEY_ID"`
+	SecretKey string `json:"AWS_SECRET_ACCESS_KEY"`
+}
+
+//go:embed .secrets.json
+var secrets []byte
+
+var ledgerSecret _ledgerSecrets
+
+func init() {
+	if err := json.Unmarshal(secrets, &ledgerSecret); err != nil {
+		log.Printf("the error is: %v", err)
+		os.Exit(1)
+	}
+}
 
 var _dbSvc *dynamodb.Client
 var _sesSvc *ses.Client
@@ -20,6 +42,11 @@ func init() {
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(_AWS_REGION),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			ledgerSecret.AccessKey,
+			ledgerSecret.SecretKey,
+			"",
+		)),
 	)
 	if err != nil {
 		log.Fatal("Failed to create DynamoDB session:", err)
@@ -36,6 +63,7 @@ func Test_transferCredits(t *testing.T) {
 		fromAccountID string
 		toAccountID   string
 		amount        float64
+		tenantId      string
 	}
 	tests := []struct {
 		name    string
@@ -43,7 +71,7 @@ func Test_transferCredits(t *testing.T) {
 		wantErr bool
 	}{
 
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 1029}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 1029, tenantId: "zero"}, false},
 		// {"testing transfer", args{fromAccountID: "0111493885", toAccountID: "151515", dbSvc: _dbSvc, amount: 323222121}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 151}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 120}, false},
@@ -59,7 +87,7 @@ func Test_transferCredits(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := TransferCredits(tt.args.dbSvc, tt.args.fromAccountID, tt.args.toAccountID, tt.args.amount); (err != nil) != tt.wantErr {
+			if err := TransferCredits(tt.args.dbSvc, tt.args.tenantId, tt.args.fromAccountID, tt.args.toAccountID, tt.args.amount); (err != nil) != tt.wantErr {
 				t.Errorf("transferCredits() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -70,6 +98,7 @@ func Test_inquireBalance(t *testing.T) {
 	type args struct {
 		dbSvc     *dynamodb.Client
 		AccountID string
+		tenantId  string
 	}
 	tests := []struct {
 		name    string
@@ -77,12 +106,12 @@ func Test_inquireBalance(t *testing.T) {
 		want    float64
 		wantErr bool
 	}{
-		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "249_ACCT_1"}, 30, false},
-		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "12"}, 2636, false},
+		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0111493885", tenantId: ""}, 30, false},
+		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "249_ACCT_1", tenantId: ""}, 2636, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := InquireBalance(tt.args.dbSvc, tt.args.AccountID)
+			got, err := InquireBalance(tt.args.dbSvc, "", tt.args.AccountID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("inquireBalance() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -99,18 +128,20 @@ func Test_createAccountWithBalance(t *testing.T) {
 		dbSvc     *dynamodb.Client
 		accountId string
 		amount    float64
+		tenantId  string
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
-		// {"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 121342212}, true},
-		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 10}, true},
+		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 121342212, tenantId: "zero"}, true},
+		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 500, tenantId: "othernil"}, true},
+		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 500, tenantId: "nonil"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := CreateAccountWithBalance(tt.args.dbSvc, tt.args.accountId, (tt.args.amount)); err != nil {
+			if err := CreateAccountWithBalance(tt.args.dbSvc, tt.args.tenantId, tt.args.accountId, (tt.args.amount)); err != nil {
 				t.Errorf("createAccountWithBalance() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -121,6 +152,7 @@ func TestCheckUser(t *testing.T) {
 	type args struct {
 		dbSvc     *dynamodb.Client
 		accountId string
+		tenantId  string
 	}
 	tests := []struct {
 		name    string
@@ -128,11 +160,12 @@ func TestCheckUser(t *testing.T) {
 		want    bool
 		wantErr bool
 	}{
-		{"testIsUser", args{dbSvc: _dbSvc, accountId: "adonese"}, true, true},
+		{"testIsUser", args{dbSvc: _dbSvc, accountId: "0111493885", tenantId: "nil"}, true, true},
+		{"testIsUser", args{dbSvc: _dbSvc, accountId: "0111493885", tenantId: "unil"}, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			notF, err := CheckUsersExist(tt.args.dbSvc, []string{tt.args.accountId, "44322"})
+			notF, err := CheckUsersExist(tt.args.dbSvc, tt.args.tenantId, []string{tt.args.accountId})
 			if err != nil {
 				t.Errorf("there's an error: %v - notfound: %v", err, notF)
 				return
@@ -170,7 +203,7 @@ func TestGetTransactions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := GetTransactions(tt.args.dbSvc, tt.args.accountID, tt.args.limit, tt.args.lastEvaluatedKey)
+			got, got1, err := GetTransactions(tt.args.dbSvc, "nil", tt.args.accountID, tt.args.limit, tt.args.lastEvaluatedKey)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTransactions() error = %v, wantErr %v - and key is: %s", err, tt.wantErr, got1)
 				return
@@ -230,7 +263,7 @@ func TestGetDetailedTransactions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetDetailedTransactions(tt.args.dbSvc, tt.args.accountID, tt.args.limit)
+			got, err := GetDetailedTransactions(tt.args.dbSvc, "nil", tt.args.accountID, tt.args.limit)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetDetailedTransactions() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -246,14 +279,16 @@ func TestGetAllNilTransactions(t *testing.T) {
 	// transactionStatus := 1
 	// Define your tests
 	tests := []struct {
-		name    string
-		filter  TransactionFilter
-		wantMin int // Use wantMin to specify the minimum number of results expected
+		name     string
+		filter   TransactionFilter
+		wantMin  int // Use wantMin to specify the minimum number of results expected
+		tenantId string
 	}{
 		{
-			name:    "Fetch all transactions",
-			filter:  TransactionFilter{},
-			wantMin: 28, // Adjust based on expected data in your test table
+			name:     "Fetch all transactions",
+			filter:   TransactionFilter{},
+			wantMin:  28, // Adjust based on expected data in your test table
+			tenantId: "nil",
 		},
 		// {
 		// 	name: "Fetch transactions for specific account",
@@ -277,7 +312,7 @@ func TestGetAllNilTransactions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := GetAllNilTransactions(ctx, _dbSvc, tt.filter)
+			got, _, err := GetAllNilTransactions(ctx, _dbSvc, tt.tenantId, tt.filter)
 			if err != nil {
 				t.Errorf("GetAllNilTransactions() error = %v", err)
 				return
