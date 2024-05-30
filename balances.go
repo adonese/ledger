@@ -12,10 +12,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/segmentio/ksuid"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/google/uuid"
 )
 
 var (
@@ -174,13 +174,13 @@ func CreateAccount(dbSvc *dynamodb.Client, tenantId string, user User) error {
 }
 
 // GetAccount retrieves an account by tenant ID and account ID.
-func GetAccount(ctx context.Context, dbSvc *dynamodb.Client, tenantID, accountID string) (*User, error) {
-	if tenantID == "" {
-		tenantID = "nil"
+func GetAccount(ctx context.Context, dbSvc *dynamodb.Client, trEntry TransactionEntry) (*User, error) {
+	if trEntry.TenantID == "" {
+		trEntry.TenantID = "nil"
 	}
 	key := map[string]types.AttributeValue{
-		"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
-		"AccountID": &types.AttributeValueMemberS{Value: accountID},
+		"TenantID":  &types.AttributeValueMemberS{Value: trEntry.TenantID},
+		"AccountID": &types.AttributeValueMemberS{Value: trEntry.AccountID},
 	}
 
 	result, err := dbSvc.GetItem(ctx, &dynamodb.GetItemInput{
@@ -237,47 +237,54 @@ func InquireBalance(dbSvc *dynamodb.Client, tenantId, AccountID string) (float64
 // It takes a DynamoDB client, the account IDs for the sender and receiver, and
 // the amount to transfer. It returns an error if the transfer fails due to
 // insufficient funds or other issues.
-func TransferCredits(dbSvc *dynamodb.Client, tenantID, fromAccountID, toAccountID string, amount float64) error {
+func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
+	if trEntry.AccountID == "" {
+		return errors.New("you must provide Account ID, substitute it for FromAccount to mimic the older api")
+	}
+	if trEntry.TenantID == "" {
+		trEntry.TenantID = "nil"
+	}
 	timestamp := getCurrentTimestamp()
 	var transactionStatus int = 1
-	uid := uuid.New().String()
+	// We are using ksuid in order to have a sortable randomized UUIDs with great entropy
+	uid := ksuid.New().String()
 
 	// Define the transaction
 	transaction := TransactionEntry{
-		TenantID:        tenantID,
-		AccountID:       fromAccountID,
+		TenantID:        trEntry.TenantID,
+		AccountID:       trEntry.FromAccount,
 		TransactionID:   uid,
-		FromAccount:     fromAccountID,
-		ToAccount:       toAccountID,
-		Amount:          amount,
+		FromAccount:     trEntry.FromAccount,
+		ToAccount:       trEntry.ToAccount,
+		Amount:          trEntry.Amount,
 		Comment:         "Transfer credits",
 		TransactionDate: timestamp,
 		Status:          &transactionStatus,
 	}
 
-	user, err := GetAccount(context.TODO(), dbSvc, tenantID, fromAccountID)
+	user, err := GetAccount(context.TODO(), dbSvc, trEntry)
 	if err != nil || user == nil {
-		SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus)
+		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
 		return fmt.Errorf("error in retrieving user: %v", err)
 	}
 
-	if amount > user.Amount {
-		SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus)
+	if trEntry.Amount > user.Amount {
+		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
 		return errors.New("insufficient balance")
 	}
 
 	debitEntry := LedgerEntry{
-		TenantID:      tenantID,
-		AccountID:     fromAccountID,
-		Amount:        amount,
+		TenantID:      trEntry.TenantID,
+		AccountID:     trEntry.FromAccount,
+		Amount:        trEntry.Amount,
 		TransactionID: uid,
 		Type:          "debit",
 		Time:          timestamp,
 	}
 	creditEntry := LedgerEntry{
-		TenantID:      tenantID,
-		AccountID:     toAccountID,
-		Amount:        amount,
+		TenantID:      trEntry.TenantID,
+		AccountID:     trEntry.ToAccount,
+		Amount:        trEntry.Amount,
 		TransactionID: uid,
 		Type:          "credit",
 		Time:          timestamp,
@@ -300,13 +307,13 @@ func TransferCredits(dbSvc *dynamodb.Client, tenantID, fromAccountID, toAccountI
 				Update: &types.Update{
 					TableName: aws.String(NilUsers),
 					Key: map[string]types.AttributeValue{
-						"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
-						"AccountID": &types.AttributeValueMemberS{Value: fromAccountID},
+						"TenantID":  &types.AttributeValueMemberS{Value: trEntry.TenantID},
+						"AccountID": &types.AttributeValueMemberS{Value: trEntry.FromAccount},
 					},
 					UpdateExpression:    aws.String("SET amount = amount - :amount, Version = :newVersion"),
 					ConditionExpression: aws.String("attribute_not_exists(Version) OR Version = :oldVersion"),
 					ExpressionAttributeValues: map[string]types.AttributeValue{
-						":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+						":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", trEntry.Amount)},
 						":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(user.Version, 10)},
 						":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
 					},
@@ -322,10 +329,10 @@ func TransferCredits(dbSvc *dynamodb.Client, tenantID, fromAccountID, toAccountI
 	_, err = dbSvc.TransactWriteItems(context.TODO(), debitInput)
 	if err != nil {
 		transactionStatus = 1
-		if err := SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus); err != nil {
+		if err := SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
-		return fmt.Errorf("failed to debit from balance for user %s: %v", fromAccountID, err)
+		return fmt.Errorf("failed to debit from balance for user %s: %v", trEntry.FromAccount, err)
 	}
 
 	// Perform the credit transaction
@@ -335,15 +342,15 @@ func TransferCredits(dbSvc *dynamodb.Client, tenantID, fromAccountID, toAccountI
 				Update: &types.Update{
 					TableName: aws.String(NilUsers),
 					Key: map[string]types.AttributeValue{
-						"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
-						"AccountID": &types.AttributeValueMemberS{Value: toAccountID},
+						"TenantID":  &types.AttributeValueMemberS{Value: trEntry.TenantID},
+						"AccountID": &types.AttributeValueMemberS{Value: trEntry.ToAccount},
 					},
 					UpdateExpression:    aws.String("SET amount = amount + :amount, Version = :newVersion"),
 					ConditionExpression: aws.String("attribute_exists(AccountID) AND TenantID = :tenantID"),
 					ExpressionAttributeValues: map[string]types.AttributeValue{
-						":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+						":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", trEntry.Amount)},
 						":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
-						":tenantID":   &types.AttributeValueMemberS{Value: tenantID},
+						":tenantID":   &types.AttributeValueMemberS{Value: trEntry.TenantID},
 					},
 				},
 			},
@@ -360,13 +367,13 @@ func TransferCredits(dbSvc *dynamodb.Client, tenantID, fromAccountID, toAccountI
 		rollbackInput := &dynamodb.UpdateItemInput{
 			TableName: aws.String(NilUsers),
 			Key: map[string]types.AttributeValue{
-				"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
-				"AccountID": &types.AttributeValueMemberS{Value: fromAccountID},
+				"TenantID":  &types.AttributeValueMemberS{Value: trEntry.TenantID},
+				"AccountID": &types.AttributeValueMemberS{Value: trEntry.FromAccount},
 			},
 			UpdateExpression:    aws.String("SET amount = amount + :amount, Version = :newVersion"),
 			ConditionExpression: aws.String("attribute_not_exists(Version) OR Version = :oldVersion"),
 			ExpressionAttributeValues: map[string]types.AttributeValue{
-				":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", amount)},
+				":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", trEntry.Amount)},
 				":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(user.Version, 10)},
 				":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
 			},
@@ -374,18 +381,18 @@ func TransferCredits(dbSvc *dynamodb.Client, tenantID, fromAccountID, toAccountI
 
 		_, rollbackErr := dbSvc.UpdateItem(context.TODO(), rollbackInput)
 		if rollbackErr != nil {
-			panic(fmt.Errorf("failed to rollback debit for user %s: %v", fromAccountID, rollbackErr))
+			panic(fmt.Errorf("failed to rollback debit for user %s: %v", trEntry.FromAccount, rollbackErr))
 		}
 
 		transactionStatus = 1
-		if err := SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus); err != nil {
+		if err := SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
-		return fmt.Errorf("failed to credit to balance for user %s: %v", toAccountID, err)
+		return fmt.Errorf("failed to credit to balance for user %s: %v", trEntry.ToAccount, err)
 	}
 
 	transactionStatus = 0
-	if err := SaveToTransactionTable(dbSvc, tenantID, transaction, transactionStatus); err != nil {
+	if err := SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus); err != nil {
 		panic(err)
 	}
 

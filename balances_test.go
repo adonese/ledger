@@ -87,7 +87,8 @@ func Test_transferCredits(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := TransferCredits(tt.args.dbSvc, tt.args.tenantId, tt.args.fromAccountID, tt.args.toAccountID, tt.args.amount); (err != nil) != tt.wantErr {
+			trEntry := TransactionEntry{TenantID: tt.args.tenantId, FromAccount: tt.args.fromAccountID, ToAccount: tt.args.fromAccountID, Amount: tt.args.amount, AccountID: tt.args.fromAccountID}
+			if err := TransferCredits(tt.args.dbSvc, trEntry); (err != nil) != tt.wantErr {
 				t.Errorf("transferCredits() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
