@@ -251,16 +251,16 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 
 	// Define the transaction
 	transaction := TransactionEntry{
-		TenantID:        trEntry.TenantID,
-		AccountID:       trEntry.FromAccount,
-		TransactionID:   uid,
-		FromAccount:     trEntry.FromAccount,
-		ToAccount:       trEntry.ToAccount,
-		Amount:          trEntry.Amount,
-		Comment:         "Transfer credits",
-		TransactionDate: timestamp,
-		Status:          &transactionStatus,
-		InitiatorUUID:   trEntry.InitiatorUUID,
+		TenantID:            trEntry.TenantID,
+		AccountID:           trEntry.FromAccount,
+		SystemTransactionID: uid,
+		FromAccount:         trEntry.FromAccount,
+		ToAccount:           trEntry.ToAccount,
+		Amount:              trEntry.Amount,
+		Comment:             "Transfer credits",
+		TransactionDate:     timestamp,
+		Status:              &transactionStatus,
+		InitiatorUUID:       trEntry.InitiatorUUID,
 	}
 
 	user, err := GetAccount(context.TODO(), dbSvc, trEntry)
@@ -275,22 +275,22 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 	}
 
 	debitEntry := LedgerEntry{
-		TenantID:      trEntry.TenantID,
-		AccountID:     trEntry.FromAccount,
-		Amount:        trEntry.Amount,
-		TransactionID: uid,
-		Type:          "debit",
-		Time:          timestamp,
-		InitiatorUUID: trEntry.InitiatorUUID,
+		TenantID:            trEntry.TenantID,
+		AccountID:           trEntry.FromAccount,
+		Amount:              trEntry.Amount,
+		SystemTransactionID: uid,
+		Type:                "debit",
+		Time:                timestamp,
+		InitiatorUUID:       trEntry.InitiatorUUID,
 	}
 	creditEntry := LedgerEntry{
-		TenantID:      trEntry.TenantID,
-		AccountID:     trEntry.ToAccount,
-		Amount:        trEntry.Amount,
-		TransactionID: uid,
-		Type:          "credit",
-		Time:          timestamp,
-		InitiatorUUID: trEntry.InitiatorUUID,
+		TenantID:            trEntry.TenantID,
+		AccountID:           trEntry.ToAccount,
+		Amount:              trEntry.Amount,
+		SystemTransactionID: uid,
+		Type:                "credit",
+		Time:                timestamp,
+		InitiatorUUID:       trEntry.InitiatorUUID,
 	}
 
 	// Marshal the entry into a DynamoDB attribute value map

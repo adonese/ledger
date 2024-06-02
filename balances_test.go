@@ -240,22 +240,22 @@ func TestGetDetailedTransactions(t *testing.T) {
 			},
 			want: []TransactionEntry{
 				{
-					AccountID:       "249_ACCT_1",
-					TransactionID:   "tx1", // Replace with the actual TransactionID
-					FromAccount:     "249_ACCT_1",
-					ToAccount:       "12",
-					Amount:          10,
-					Comment:         "Transfer credits",
-					TransactionDate: 1632835600, // Replace with the actual TransactionDate
+					AccountID:           "249_ACCT_1",
+					SystemTransactionID: "tx1", // Replace with the actual TransactionID
+					FromAccount:         "249_ACCT_1",
+					ToAccount:           "12",
+					Amount:              10,
+					Comment:             "Transfer credits",
+					TransactionDate:     1632835600, // Replace with the actual TransactionDate
 				},
 				{
-					AccountID:       "249_ACCT_1",
-					TransactionID:   "tx2", // Replace with the actual TransactionID
-					FromAccount:     "249_ACCT_1",
-					ToAccount:       "12",
-					Amount:          15,
-					Comment:         "Transfer credits",
-					TransactionDate: 1632835600, // Replace with the actual TransactionDate
+					AccountID:           "249_ACCT_1",
+					SystemTransactionID: "tx2", // Replace with the actual TransactionID
+					FromAccount:         "249_ACCT_1",
+					ToAccount:           "12",
+					Amount:              15,
+					Comment:             "Transfer credits",
+					TransactionDate:     1632835600, // Replace with the actual TransactionDate
 				},
 				// Add the rest of the transactions here...
 			},

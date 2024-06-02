@@ -97,16 +97,17 @@ func (u *User) UnmarshalJSON(b []byte) error {
 }
 
 type TransactionEntry struct {
-	AccountID       string  `dynamodbav:"AccountID" json:"account_id,omitempty"`
-	TransactionID   string  `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
-	FromAccount     string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
-	ToAccount       string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
-	Amount          float64 `dynamodbav:"Amount" json:"amount"`
-	Comment         string  `dynamodbav:"Comment" json:"comment,omitempty"`
-	TransactionDate int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
-	Status          *int    `dynamodbav:"TransactionStatus" json:"status,omitempty"`
-	TenantID        string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
-	InitiatorUUID   string  `dynamodbav:"UUID" json:"uuid,omitempty"`
+	AccountID           string  `dynamodbav:"AccountID" json:"account_id,omitempty"`
+	SystemTransactionID string  `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
+	FromAccount         string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
+	ToAccount           string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
+	Amount              float64 `dynamodbav:"Amount" json:"amount"`
+	Comment             string  `dynamodbav:"Comment" json:"comment,omitempty"`
+	TransactionDate     int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
+	Status              *int    `dynamodbav:"TransactionStatus" json:"status,omitempty"`
+	TenantID            string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
+	InitiatorUUID       string  `dynamodbav:"UUID" json:"uuid,omitempty"`
+	Timestamp           string  `dynamodbav:"timestamp" json:"timestamp,omitempty"`
 }
 
 // Create a new transacton entry and populate it with default time and status of 1, using the current time. Should we use pointer? or use func (n *TransactionEntry) New() which us better
@@ -114,13 +115,13 @@ func NewTransactionEntry(fromAccount, toAccount string, amount float64) Transact
 	uid := uuid.New().String()
 	failedTransaction := 1
 	return TransactionEntry{
-		TransactionID:   uid,
-		FromAccount:     fromAccount,
-		ToAccount:       toAccount,
-		Amount:          amount,
-		Comment:         "failed",
-		TransactionDate: getCurrentTimestamp(),
-		Status:          &failedTransaction,
+		SystemTransactionID: uid,
+		FromAccount:         fromAccount,
+		ToAccount:           toAccount,
+		Amount:              amount,
+		Comment:             "failed",
+		TransactionDate:     getCurrentTimestamp(),
+		Status:              &failedTransaction,
 	}
 }
 
