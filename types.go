@@ -108,9 +108,11 @@ type TransactionEntry struct {
 	TenantID            string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
 	InitiatorUUID       string  `dynamodbav:"UUID" json:"uuid,omitempty"`
 	Timestamp           string  `dynamodbav:"timestamp" json:"timestamp,omitempty"`
+	SignedUUID          string  `dynamodbav:"signed_uuid" json:"signed_uuid,omitempty"`
 }
 
-// Create a new transacton entry and populate it with default time and status of 1, using the current time. Should we use pointer? or use func (n *TransactionEntry) New() which us better
+// Create a new transacton entry and populate it with default time and status of 1, using the current time.
+// Should we use pointer? or use func (n *TransactionEntry) New() which us better
 func NewTransactionEntry(fromAccount, toAccount string, amount float64) TransactionEntry {
 	uid := uuid.New().String()
 	failedTransaction := 1
@@ -132,4 +134,35 @@ type TransactionFilter struct {
 	EndTime           int64
 	LastEvaluatedKey  map[string]types.AttributeValue
 	Limit             int32
+}
+
+// NilRresponse
+// Status should be: error, success, pending
+// Code: a generic nil code message
+/*
+    "status": "error",
+    "code": "insufficient_balance",
+    "message": "Insufficient balance to complete the transaction.",
+    "details": "The user does not have enough balance in their account.",
+    "timestamp": "2024-05-24T12:05:00Z",
+    "uuid": "uuid_001",
+    "signed_uuid": "signed_uuid_001"
+} */
+
+type NilResponse struct {
+	Status    string `json:"status,omitempty"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp,omitempty"`
+	Data      data   `json:"data"`
+	Details   string `json:"details,omitempty"`
+}
+
+type data struct {
+	FromAccount   string  `json:"from_account,omitempty"`
+	UUID          string  `json:"uuid,omitempty"`
+	TransactionID string  `json:"transaction_id,omitempty"`
+	Amount        float64 `json:"amount,omitempty"`
+	SignedUUID    string  `json:"signed_uuid,omitempty"`
+	Currency      string  `json:"currency,omitempty"`
 }

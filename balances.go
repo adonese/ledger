@@ -235,21 +235,20 @@ func InquireBalance(dbSvc *dynamodb.Client, tenantId, AccountID string) (float64
 // TransferCredits transfers a specified amount from one account to another.
 // It performs a transaction that debits one account and credits another.
 // It takes a DynamoDB client, the account IDs for the sender and receiver, and
-// the amount to transfer. It returns an error if the transfer fails due to
+// the amount to transfer. It returns a NilResponse and an error if the transfer fails due to
 // insufficient funds or other issues.
-func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
+func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilResponse, error) {
+	var response NilResponse
 	if trEntry.AccountID == "" {
-		return errors.New("you must provide Account ID, substitute it for FromAccount to mimic the older api")
+		return response, errors.New("you must provide Account ID, substitute it for FromAccount to mimic the older api")
 	}
 	if trEntry.TenantID == "" {
 		trEntry.TenantID = "nil"
 	}
 	timestamp := getCurrentTimestamp()
 	var transactionStatus int = 1
-	// We are using ksuid in order to have a sortable randomized UUIDs with great entropy
 	uid := ksuid.New().String()
 
-	// Define the transaction
 	transaction := TransactionEntry{
 		TenantID:            trEntry.TenantID,
 		AccountID:           trEntry.FromAccount,
@@ -266,12 +265,34 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 	user, err := GetAccount(context.TODO(), dbSvc, trEntry)
 	if err != nil || user == nil {
 		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
-		return fmt.Errorf("error in retrieving user: %v", err)
+		response = NilResponse{
+			Status:    "error",
+			Code:      "user_not_found",
+			Message:   "Error in retrieving user.",
+			Details:   fmt.Sprintf("Error in retrieving user: %v", err),
+			Timestamp: trEntry.Timestamp,
+			Data: data{
+				UUID:       trEntry.InitiatorUUID,
+				SignedUUID: trEntry.SignedUUID,
+			},
+		}
+		return response, err
 	}
 
 	if trEntry.Amount > user.Amount {
 		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
-		return errors.New("insufficient balance")
+		response = NilResponse{
+			Status:    "error",
+			Code:      "insufficient_balance",
+			Message:   "Insufficient balance to complete the transaction.",
+			Details:   "The user does not have enough balance in their account.",
+			Timestamp: trEntry.Timestamp,
+			Data: data{
+				UUID:       trEntry.InitiatorUUID,
+				SignedUUID: trEntry.SignedUUID,
+			},
+		}
+		return response, errors.New("insufficient balance")
 	}
 
 	debitEntry := LedgerEntry{
@@ -293,17 +314,15 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 		InitiatorUUID:       trEntry.InitiatorUUID,
 	}
 
-	// Marshal the entry into a DynamoDB attribute value map
 	avDebit, err := attributevalue.MarshalMap(debitEntry)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ledger entry: %v", err)
+		return response, fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
 	avCredit, err := attributevalue.MarshalMap(creditEntry)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ledger entry: %v", err)
+		return response, fmt.Errorf("failed to marshal ledger entry: %v", err)
 	}
 
-	// Perform the debit transaction
 	debitInput := &dynamodb.TransactWriteItemsInput{
 		TransactItems: []types.TransactWriteItem{
 			{
@@ -325,7 +344,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 			{Put: &types.Put{
 				TableName: aws.String(LedgerTable),
 				Item:      avDebit,
-			}}, // PUT debit
+			}},
 		},
 	}
 
@@ -335,10 +354,20 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 		if err := SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
-		return fmt.Errorf("failed to debit from balance for user %s: %v", trEntry.FromAccount, err)
+		response = NilResponse{
+			Status:    "error",
+			Code:      "debit_failed",
+			Message:   fmt.Sprintf("Failed to debit from balance for user %s", trEntry.FromAccount),
+			Details:   fmt.Sprintf("Error: %v", err),
+			Timestamp: trEntry.Timestamp,
+			Data: data{
+				UUID:       trEntry.InitiatorUUID,
+				SignedUUID: trEntry.SignedUUID,
+			},
+		}
+		return response, fmt.Errorf("failed to debit from balance for user %s: %v", trEntry.FromAccount, err)
 	}
 
-	// Perform the credit transaction
 	creditInput := &dynamodb.TransactWriteItemsInput{
 		TransactItems: []types.TransactWriteItem{
 			{
@@ -366,7 +395,6 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 
 	_, err = dbSvc.TransactWriteItems(context.TODO(), creditInput)
 	if err != nil {
-		// Rollback debit if credit fails
 		rollbackInput := &dynamodb.UpdateItemInput{
 			TableName: aws.String(NilUsers),
 			Key: map[string]types.AttributeValue{
@@ -391,7 +419,18 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 		if err := SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus); err != nil {
 			panic(err)
 		}
-		return fmt.Errorf("failed to credit to balance for user %s: %v", trEntry.ToAccount, err)
+		response = NilResponse{
+			Status:    "error",
+			Code:      "credit_failed",
+			Message:   fmt.Sprintf("Failed to credit to balance for user %s", trEntry.ToAccount),
+			Details:   fmt.Sprintf("Error: %v", err),
+			Timestamp: trEntry.Timestamp,
+			Data: data{
+				UUID:       trEntry.InitiatorUUID,
+				SignedUUID: trEntry.SignedUUID,
+			},
+		}
+		return response, fmt.Errorf("failed to credit to balance for user %s: %v", trEntry.ToAccount, err)
 	}
 
 	transactionStatus = 0
@@ -399,7 +438,20 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) error {
 		panic(err)
 	}
 
-	return nil
+	response = NilResponse{
+		Status:  "success",
+		Code:    "successful_transaction",
+		Message: "Transaction initiated successfully.",
+		Data: data{
+			TransactionID: uid,
+			Amount:        trEntry.Amount,
+			Currency:      "SDG",
+			UUID:          trEntry.InitiatorUUID,
+			SignedUUID:    trEntry.SignedUUID,
+		},
+	}
+
+	return response, nil
 }
 
 // GetTransactions retrieves a list of transactions for a specified tenant and account.
