@@ -36,9 +36,7 @@ func InitializeLedger(accessKey, secretKey, region string) (*dynamodb.Client, er
 	if err != nil {
 		return nil, err
 	}
-
 	return dynamodb.NewFromConfig(cfg), nil
-
 }
 
 // NewS3 initializes an S3 client using AWS credentials.
@@ -82,23 +80,24 @@ func test() {
 	}
 
 	_dbSvc = dynamodb.NewFromConfig(cfg)
+	ctx := context.TODO()
 
-	// Perform credit and debit transactions``
-	err = RecordCredit(_dbSvc, "account_id_1", 100.0)
+	// Perform credit and debit transactions
+	err = recordCredit(ctx, _dbSvc, "account_id_1", 100.0)
 	if err != nil {
 		log.Fatal("Failed to record credit transaction:", err)
 	}
 
-	err = RecordDebit(_dbSvc, "account_id_1", 50.0)
+	err = recordDebit(ctx, _dbSvc, "account_id_1", 50.0)
 	if err != nil {
 		log.Fatal("Failed to record debit transaction:", err)
 	}
 }
 
-// RecordCredit records a credit transaction for an account.
+// recordCredit records a credit transaction for an account.
 // It takes a DynamoDB client, an account ID, and the amount to be credited.
 // It returns an error if the recording fails.
-func RecordCredit(client *dynamodb.Client, accountID string, amount float64) error {
+func recordCredit(context context.Context, client *dynamodb.Client, accountID string, amount float64) error {
 	// Create a new ledger entry
 	entry := LedgerEntry{
 		AccountID:           accountID,
@@ -121,7 +120,7 @@ func RecordCredit(client *dynamodb.Client, accountID string, amount float64) err
 	}
 
 	// Put the ledger entry into the DynamoDB table
-	_, err = client.PutItem(context.TODO(), input)
+	_, err = client.PutItem(context, input)
 	if err != nil {
 		return errors.New("failed to record credit transaction")
 	}
@@ -129,10 +128,10 @@ func RecordCredit(client *dynamodb.Client, accountID string, amount float64) err
 	return nil
 }
 
-// RecordDebit records a debit transaction for an account.
+// recordDebit records a debit transaction for an account.
 // It takes a DynamoDB client, an account ID, and the amount to be debited.
 // It returns an error if the recording fails.
-func RecordDebit(client *dynamodb.Client, accountID string, amount float64) error {
+func recordDebit(context context.Context, client *dynamodb.Client, accountID string, amount float64) error {
 	// Create a new ledger entry
 	entry := LedgerEntry{
 		AccountID:           accountID,
@@ -155,7 +154,7 @@ func RecordDebit(client *dynamodb.Client, accountID string, amount float64) erro
 	}
 
 	// Put the ledger entry into the DynamoDB table
-	_, err = client.PutItem(context.TODO(), input)
+	_, err = client.PutItem(context, input)
 	if err != nil {
 		return fmt.Errorf("failed to record debit transaction: %v", err)
 	}

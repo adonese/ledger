@@ -43,7 +43,7 @@ type UserBalance struct {
 // CheckUsersExist checks if the provided account IDs exist in the DynamoDB table.
 // It takes a DynamoDB client and a slice of account IDs and returns a slice of
 // non-existent account IDs and an error, if any.
-func CheckUsersExist(dbSvc *dynamodb.Client, tenantId string, accountIds []string) ([]string, error) {
+func CheckUsersExist(context context.Context, dbSvc *dynamodb.Client, tenantId string, accountIds []string) ([]string, error) {
 	// Prepare the input for the BatchGetItem operation
 	if tenantId == "" {
 		tenantId = "nil"
@@ -65,7 +65,7 @@ func CheckUsersExist(dbSvc *dynamodb.Client, tenantId string, accountIds []strin
 	}
 
 	// Retrieve the items from DynamoDB
-	result, err := dbSvc.BatchGetItem(context.TODO(), input)
+	result, err := dbSvc.BatchGetItem(context, input)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func CheckUsersExist(dbSvc *dynamodb.Client, tenantId string, accountIds []strin
 //
 // FIXME(adonese): currently this creates a destructive operation where it overrides an existing user.
 // the only way we're yet allowing this, is because the logic is managed via another indirection layer.
-func CreateAccountWithBalance(dbSvc *dynamodb.Client, tenantId, accountId string, amount float64) error {
+func CreateAccountWithBalance(context context.Context, dbSvc *dynamodb.Client, tenantId, accountId string, amount float64) error {
 	if tenantId == "" {
 		tenantId = "nil" // default value for old clients
 	}
@@ -130,12 +130,12 @@ func CreateAccountWithBalance(dbSvc *dynamodb.Client, tenantId, accountId string
 		ConditionExpression: &conditionExpression,
 	}
 
-	_, err := dbSvc.PutItem(context.TODO(), input)
+	_, err := dbSvc.PutItem(context, input)
 	log.Printf("the error is: %v", err)
 	return err
 }
 
-func CreateAccount(dbSvc *dynamodb.Client, tenantId string, user User) error {
+func CreateAccount(context context.Context, dbSvc *dynamodb.Client, tenantId string, user User) error {
 	if tenantId == "" {
 		tenantId = "nil"
 	}
@@ -168,7 +168,7 @@ func CreateAccount(dbSvc *dynamodb.Client, tenantId string, user User) error {
 		Item:      item,
 	}
 
-	_, err := dbSvc.PutItem(context.TODO(), input)
+	_, err := dbSvc.PutItem(context, input)
 	log.Printf("the error is: %v", err)
 	return err
 }
@@ -207,11 +207,11 @@ func GetAccount(ctx context.Context, dbSvc *dynamodb.Client, trEntry Transaction
 // InquireBalance inquires the balance of a given user account.
 // It takes a DynamoDB client and an account ID, returning the balance
 // as a float64 and an error if the inquiry fails or the user does not exist.
-func InquireBalance(dbSvc *dynamodb.Client, tenantId, AccountID string) (float64, error) {
+func InquireBalance(context context.Context, dbSvc *dynamodb.Client, tenantId, AccountID string) (float64, error) {
 	if tenantId == "" {
 		tenantId = "nil"
 	}
-	result, err := dbSvc.GetItem(context.TODO(), &dynamodb.GetItemInput{
+	result, err := dbSvc.GetItem(context, &dynamodb.GetItemInput{
 		TableName: aws.String(NilUsers),
 		Key: map[string]types.AttributeValue{
 			"AccountID": &types.AttributeValueMemberS{Value: AccountID},
@@ -237,7 +237,7 @@ func InquireBalance(dbSvc *dynamodb.Client, tenantId, AccountID string) (float64
 // It takes a DynamoDB client, the account IDs for the sender and receiver, and
 // the amount to transfer. It returns a NilResponse and an error if the transfer fails due to
 // insufficient funds or other issues.
-func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilResponse, error) {
+func TransferCredits(context context.Context, dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilResponse, error) {
 	var response NilResponse
 	if trEntry.AccountID == "" {
 		return response, errors.New("you must provide Account ID, substitute it for FromAccount to mimic the older api")
@@ -263,7 +263,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 	}
 
 	// Fetch sender account
-	sender, err := GetAccount(context.TODO(), dbSvc, trEntry)
+	sender, err := GetAccount(context, dbSvc, trEntry)
 	if err != nil || sender == nil {
 		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
 		response = NilResponse{
@@ -282,7 +282,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 
 	// Fetch receiver account
 	trEntry.AccountID = trEntry.ToAccount
-	receiver, err := GetAccount(context.TODO(), dbSvc, trEntry)
+	receiver, err := GetAccount(context, dbSvc, trEntry)
 	if err != nil || receiver == nil {
 		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
 		response = NilResponse{
@@ -368,7 +368,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 		},
 	}
 
-	_, err = dbSvc.TransactWriteItems(context.TODO(), debitInput)
+	_, err = dbSvc.TransactWriteItems(context, debitInput)
 	if err != nil {
 		transactionStatus = 1
 		if err := SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus); err != nil {
@@ -413,7 +413,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 		},
 	}
 
-	_, err = dbSvc.TransactWriteItems(context.TODO(), creditInput)
+	_, err = dbSvc.TransactWriteItems(context, creditInput)
 	if err != nil {
 		rollbackInput := &dynamodb.UpdateItemInput{
 			TableName: aws.String(NilUsers),
@@ -430,7 +430,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 			},
 		}
 
-		_, rollbackErr := dbSvc.UpdateItem(context.TODO(), rollbackInput)
+		_, rollbackErr := dbSvc.UpdateItem(context, rollbackInput)
 		if rollbackErr != nil {
 			panic(fmt.Errorf("failed to rollback debit for user %s: %v", trEntry.FromAccount, rollbackErr))
 		}
@@ -478,7 +478,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 // It takes a DynamoDB client, a tenant ID, an account ID, a limit for the number of transactions
 // to retrieve, and an optional lastTransactionID for pagination.
 // It returns a slice of LedgerEntry, the ID of the last transaction, and an error, if any.
-func GetTransactions(dbSvc *dynamodb.Client, tenantID, accountID string, limit int32, lastTransactionID string) ([]LedgerEntry, string, error) {
+func GetTransactions(context context.Context, dbSvc *dynamodb.Client, tenantID, accountID string, limit int32, lastTransactionID string) ([]LedgerEntry, string, error) {
 	if tenantID == "" {
 		tenantID = "nil"
 	}
@@ -501,7 +501,7 @@ func GetTransactions(dbSvc *dynamodb.Client, tenantID, accountID string, limit i
 	}
 
 	// Execute the query
-	resp, err := dbSvc.Query(context.TODO(), input)
+	resp, err := dbSvc.Query(context, input)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch transactions: %v", err)
 	}
@@ -525,17 +525,17 @@ func GetTransactions(dbSvc *dynamodb.Client, tenantID, accountID string, limit i
 // GetDetailedTransactions retrieves a list of transactions for a specified tenant and account.
 // It takes a DynamoDB client, a tenant ID, an account ID, and a limit for the number of transactions
 // to retrieve. It returns a slice of TransactionEntry and an error, if any.
-func GetDetailedTransactions(dbSvc *dynamodb.Client, tenantID, accountID string, limit int32) ([]TransactionEntry, error) {
+func GetDetailedTransactions(context context.Context, dbSvc *dynamodb.Client, tenantID, accountID string, limit int32) ([]TransactionEntry, error) {
 	// Query for transactions sent by the account
 	if tenantID == "" {
 		tenantID = "nil"
 	}
-	sentTransactions, _, err := getTransactionsByIndex(dbSvc, tenantID, "FromAccountIndex", "FromAccount", accountID, limit, "")
+	sentTransactions, _, err := getTransactionsByIndex(context, dbSvc, tenantID, "FromAccountIndex", "FromAccount", accountID, limit, "")
 	if err != nil {
 		return nil, err
 	}
 	// Query for transactions received by the account
-	receivedTransactions, _, err := getTransactionsByIndex(dbSvc, tenantID, "ToAccountIndex", "ToAccount", accountID, limit, "")
+	receivedTransactions, _, err := getTransactionsByIndex(context, dbSvc, tenantID, "ToAccountIndex", "ToAccount", accountID, limit, "")
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +547,7 @@ func GetDetailedTransactions(dbSvc *dynamodb.Client, tenantID, accountID string,
 }
 
 // getTransactionsByIndex is a helper function that queries for transactions on a specific index.
-func getTransactionsByIndex(dbSvc *dynamodb.Client, tenantID, indexName, attributeName, accountID string, limit int32, lastTransactionID string) ([]TransactionEntry, string, error) {
+func getTransactionsByIndex(context context.Context, dbSvc *dynamodb.Client, tenantID, indexName, attributeName, accountID string, limit int32, lastTransactionID string) ([]TransactionEntry, string, error) {
 	if tenantID == "" {
 		tenantID = "nil"
 	}
@@ -570,7 +570,7 @@ func getTransactionsByIndex(dbSvc *dynamodb.Client, tenantID, indexName, attribu
 		}
 	}
 
-	resp, err := dbSvc.Query(context.TODO(), input)
+	resp, err := dbSvc.Query(context, input)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch transactions: %v", err)
 	}
