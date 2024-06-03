@@ -205,7 +205,7 @@ resource "aws_dynamodb_table" "transactions" {
   }
 
     global_secondary_index {
-    name               = "UserUUIDIndec"
+    name               = "UserUUIDIndex"
     hash_key           = "TenantID"
     range_key          = "UUID"
     projection_type    = "ALL"

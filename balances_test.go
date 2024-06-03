@@ -10,10 +10,15 @@ import (
 
 	_ "embed"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -71,7 +76,13 @@ func Test_transferCredits(t *testing.T) {
 		wantErr bool
 	}{
 
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 1029, tenantId: "zero"}, false},
+		// 121336038
+		// 6224
+		// 6224
+		// there's a severe bug in transfering credits
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 67, tenantId: "zero"}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", dbSvc: _dbSvc, amount: 10000, tenantId: "nil"}, false},
+		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", dbSvc: _dbSvc, amount: 10000, tenantId: "noooon"}, true},
 		// {"testing transfer", args{fromAccountID: "0111493885", toAccountID: "151515", dbSvc: _dbSvc, amount: 323222121}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 151}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 120}, false},
@@ -87,10 +98,16 @@ func Test_transferCredits(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			trEntry := TransactionEntry{TenantID: tt.args.tenantId, FromAccount: tt.args.fromAccountID, ToAccount: tt.args.fromAccountID, Amount: tt.args.amount, AccountID: tt.args.fromAccountID}
-			if _, err := TransferCredits(tt.args.dbSvc, trEntry); (err != nil) != tt.wantErr {
+			trEntry := TransactionEntry{TenantID: tt.args.tenantId, FromAccount: tt.args.fromAccountID, ToAccount: tt.args.toAccountID,
+				Amount: tt.args.amount, AccountID: tt.args.fromAccountID, InitiatorUUID: uuid.NewString()}
+			res, err := TransferCredits(tt.args.dbSvc, trEntry)
+			if err != nil {
 				t.Errorf("transferCredits() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			if res.Code != "failed" {
+				t.Errorf("transferCredits() error = %+v", res)
+			}
+
 		})
 	}
 }
@@ -107,7 +124,7 @@ func Test_inquireBalance(t *testing.T) {
 		want    float64
 		wantErr bool
 	}{
-		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0111493885", tenantId: ""}, 30, false},
+		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0111498888", tenantId: ""}, 30, false},
 		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "249_ACCT_1", tenantId: ""}, 2636, false},
 	}
 	for _, tt := range tests {
@@ -321,6 +338,156 @@ func TestGetAllNilTransactions(t *testing.T) {
 			if len(got) != tt.wantMin {
 				t.Errorf("GetAllNilTransactions() got %v, want at least %v results - the result is: %+v", len(got), tt.wantMin, got)
 			}
+		})
+	}
+}
+
+// SetupTestData initializes the DynamoDB table with predefined accounts and balances.
+func setupTestData(dbSvc *dynamodb.Client) {
+	accounts := []UserBalance{
+		{"0111493885", 500},
+		{"0111493885", 6224},
+		{"0111493888", 0},
+		{"0111498888", 0},
+		{"249_ACCT_1", 121336038},
+		{"249_ACCT_1", 121341183},
+		{"0111493885", 500},
+	}
+
+	for _, acc := range accounts {
+		item, _ := attributevalue.MarshalMap(acc)
+		dbSvc.PutItem(context.TODO(), &dynamodb.PutItemInput{
+			TableName: aws.String(NilUsers),
+			Item:      item,
+		})
+	}
+}
+
+func TestTransferCredits(t *testing.T) {
+	dbSvc := _dbSvc
+	setupTestData(dbSvc)
+
+	type args struct {
+		dbSvc         *dynamodb.Client
+		fromAccountID string
+		toAccountID   string
+		amount        float64
+		tenantId      string
+	}
+	tests := []struct {
+		name         string
+		args         args
+		wantErr      bool
+		expectedCode string
+		beforeFrom   float64
+		beforeTo     float64
+		afterFrom    float64
+		afterTo      float64
+	}{
+		{
+			name:         "Basic Transfer",
+			args:         args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", amount: 10000, tenantId: "nil", dbSvc: dbSvc},
+			wantErr:      false,
+			expectedCode: "successful_transaction",
+			beforeFrom:   121336038,
+			beforeTo:     0,
+			afterFrom:    121326038,
+			afterTo:      10000,
+		},
+		{
+			name:         "Insufficient Funds",
+			args:         args{fromAccountID: "0111493888", toAccountID: "0111498888", amount: 1, tenantId: "nil", dbSvc: dbSvc},
+			wantErr:      true,
+			expectedCode: "insufficient_balance",
+			beforeFrom:   0,
+			beforeTo:     0,
+			afterFrom:    0,
+			afterTo:      0,
+		},
+		{
+			name:         "Non-existent Sender",
+			args:         args{fromAccountID: "nonexistent", toAccountID: "0111498888", amount: 1, tenantId: "nil", dbSvc: dbSvc},
+			wantErr:      true,
+			expectedCode: "user_not_found",
+			beforeFrom:   0,
+			beforeTo:     0,
+			afterFrom:    0,
+			afterTo:      0,
+		},
+		{
+			name:         "Non-existent Receiver",
+			args:         args{fromAccountID: "249_ACCT_1", toAccountID: "nonexistent", amount: 1000, tenantId: "nil", dbSvc: dbSvc},
+			wantErr:      true,
+			expectedCode: "user_not_found",
+			beforeFrom:   121336038,
+			beforeTo:     0,
+			afterFrom:    121336038,
+			afterTo:      0,
+		},
+		{
+			name:         "Zero Transfer",
+			args:         args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", amount: 0, tenantId: "nil", dbSvc: dbSvc},
+			wantErr:      true,
+			expectedCode: "invalid_amount",
+			beforeFrom:   121336038,
+			beforeTo:     0,
+			afterFrom:    121336038,
+			afterTo:      0,
+		},
+		{
+			name:         "Negative Transfer",
+			args:         args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", amount: -100, tenantId: "nil", dbSvc: dbSvc},
+			wantErr:      true,
+			expectedCode: "invalid_amount",
+			beforeFrom:   121336038,
+			beforeTo:     0,
+			afterFrom:    121336038,
+			afterTo:      0,
+		},
+		{
+			name:         "Floating Point Transfer",
+			args:         args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", amount: 1234.56, tenantId: "nil", dbSvc: dbSvc},
+			wantErr:      false,
+			expectedCode: "successful_transaction",
+			beforeFrom:   121336038,
+			beforeTo:     0,
+			afterFrom:    121334803.44,
+			afterTo:      1234.56,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Capture balances before transfer
+			fromAccountBalance, _ := InquireBalance(tt.args.dbSvc, tt.args.tenantId, tt.args.fromAccountID)
+			toAccountBalance, _ := InquireBalance(tt.args.dbSvc, tt.args.tenantId, tt.args.toAccountID)
+
+			assert.Equal(t, tt.beforeFrom, fromAccountBalance, "Before fromAccount balance should match")
+			assert.Equal(t, tt.beforeTo, toAccountBalance, "Before toAccount balance should match")
+
+			trEntry := TransactionEntry{
+				TenantID:      tt.args.tenantId,
+				FromAccount:   tt.args.fromAccountID,
+				ToAccount:     tt.args.toAccountID,
+				Amount:        tt.args.amount,
+				AccountID:     tt.args.fromAccountID,
+				InitiatorUUID: uuid.NewString(),
+			}
+			res, err := TransferCredits(tt.args.dbSvc, trEntry)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TransferCredits() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if res.Code != tt.expectedCode {
+				t.Errorf("TransferCredits() = %+v, expectedCode %v", res, tt.expectedCode)
+			}
+
+			// Capture balances after transfer
+			fromAccountBalanceAfter, _ := InquireBalance(tt.args.dbSvc, tt.args.tenantId, tt.args.fromAccountID)
+			toAccountBalanceAfter, _ := InquireBalance(tt.args.dbSvc, tt.args.tenantId, tt.args.toAccountID)
+
+			assert.Equal(t, tt.afterFrom, fromAccountBalanceAfter, "After fromAccount balance should match")
+			assert.Equal(t, tt.afterTo, toAccountBalanceAfter, "After toAccount balance should match")
 		})
 	}
 }

@@ -262,14 +262,15 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 		InitiatorUUID:       trEntry.InitiatorUUID,
 	}
 
-	user, err := GetAccount(context.TODO(), dbSvc, trEntry)
-	if err != nil || user == nil {
+	// Fetch sender account
+	sender, err := GetAccount(context.TODO(), dbSvc, trEntry)
+	if err != nil || sender == nil {
 		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
 		response = NilResponse{
 			Status:    "error",
 			Code:      "user_not_found",
-			Message:   "Error in retrieving user.",
-			Details:   fmt.Sprintf("Error in retrieving user: %v", err),
+			Message:   "Error in retrieving sender.",
+			Details:   fmt.Sprintf("Error in retrieving sender: %v", err),
 			Timestamp: trEntry.Timestamp,
 			Data: data{
 				UUID:       trEntry.InitiatorUUID,
@@ -279,13 +280,32 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 		return response, err
 	}
 
-	if trEntry.Amount > user.Amount {
+	// Fetch receiver account
+	trEntry.AccountID = trEntry.ToAccount
+	receiver, err := GetAccount(context.TODO(), dbSvc, trEntry)
+	if err != nil || receiver == nil {
+		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
+		response = NilResponse{
+			Status:    "error",
+			Code:      "user_not_found",
+			Message:   "Error in retrieving receiver.",
+			Details:   fmt.Sprintf("Error in retrieving receiver: %v", err),
+			Timestamp: trEntry.Timestamp,
+			Data: data{
+				UUID:       trEntry.InitiatorUUID,
+				SignedUUID: trEntry.SignedUUID,
+			},
+		}
+		return response, err
+	}
+
+	if trEntry.Amount > sender.Amount {
 		SaveToTransactionTable(dbSvc, trEntry.TenantID, transaction, transactionStatus)
 		response = NilResponse{
 			Status:    "error",
 			Code:      "insufficient_balance",
 			Message:   "Insufficient balance to complete the transaction.",
-			Details:   "The user does not have enough balance in their account.",
+			Details:   "The sender does not have enough balance in their account.",
 			Timestamp: trEntry.Timestamp,
 			Data: data{
 				UUID:       trEntry.InitiatorUUID,
@@ -336,7 +356,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 					ConditionExpression: aws.String("attribute_not_exists(Version) OR Version = :oldVersion"),
 					ExpressionAttributeValues: map[string]types.AttributeValue{
 						":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", trEntry.Amount)},
-						":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(user.Version, 10)},
+						":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(sender.Version, 10)},
 						":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
 					},
 				},
@@ -405,7 +425,7 @@ func TransferCredits(dbSvc *dynamodb.Client, trEntry TransactionEntry) (NilRespo
 			ConditionExpression: aws.String("attribute_not_exists(Version) OR Version = :oldVersion"),
 			ExpressionAttributeValues: map[string]types.AttributeValue{
 				":amount":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", trEntry.Amount)},
-				":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(user.Version, 10)},
+				":oldVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(sender.Version, 10)},
 				":newVersion": &types.AttributeValueMemberN{Value: strconv.FormatInt(getCurrentTimestamp(), 10)},
 			},
 		}
