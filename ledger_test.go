@@ -1,40 +1,10 @@
 package ledger
 
 import (
-	"context"
 	"testing"
-
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
 var _AWS_REGION = "us-east-1"
-
-func TestRecordDebit(t *testing.T) {
-
-	type args struct {
-		db        *dynamodb.Client
-		accountID string
-		amount    float64
-		context   context.Context
-	}
-	ctx := context.TODO()
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 101, context: ctx}, false},
-		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 101, context: ctx}, false},
-		{"test-credit", args{db: _dbSvc, accountID: "249_ACCT_1", amount: 101, context: ctx}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := recordDebit(tt.args.context, tt.args.db, tt.args.accountID, tt.args.amount); err != nil {
-				t.Errorf("RecordDebit() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
 
 func TestInitializeLedger(t *testing.T) {
 	type args struct {
