@@ -51,6 +51,9 @@ name           = "NilUsers"
     type = "S"
   }
 
+  stream_enabled   = true
+  stream_view_type = "NEW_AND_OLD_IMAGES"
+
   // Global Secondary Index on Email
   global_secondary_index {
     name               = "EmailIndex"
@@ -214,6 +217,99 @@ resource "aws_dynamodb_table" "transactions" {
   }
 }
 
+
+# This is for backing up our data. We don't want to inadvertently delete important data
+resource "aws_dynamodb_table" "DeletedNilUsers" {
+  name           = "DeletedNilUsers"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "TenantID"
+  range_key      = "AccountID"
+
+  attribute {
+    name = "TenantID"
+    type = "S"
+  }
+
+  attribute {
+    name = "AccountID"
+    type = "S"
+  }
+}
+
+
+resource "aws_iam_role" "lambda_dynamodb_role" {
+  name = "lambda_dynamodb_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "lambda.amazonaws.com",
+        },
+      },
+    ],
+  })
+}
+
+resource "aws_iam_policy" "lambda_dynamodb_policy" {
+  name        = "lambda_dynamodb_policy"
+  description = "Policy for Lambda to access DynamoDB"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:GetRecords",
+          "dynamodb:GetShardIterator",
+          "dynamodb:DescribeStream",
+          "dynamodb:ListStreams",
+        ],
+        Effect = "Allow",
+        Resource = [
+          aws_dynamodb_table.NilUsersTable.arn,
+          aws_dynamodb_table.NilUsersTable.stream_arn,
+          aws_dynamodb_table.DeletedNilUsers.arn,
+        ],
+      },
+    ],
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_policy_attach" {
+  role       = aws_iam_role.lambda_dynamodb_role.name
+  policy_arn = aws_iam_policy.lambda_dynamodb_policy.arn
+}
+
+data "local_file" "lambda_zip_hash" {
+  filename = "function.zip"
+}
+
+resource "aws_lambda_function" "dynamodb_stream_processor" {
+  filename         = "function.zip"
+  function_name    = "dynamodb_stream_processor"
+  role             = aws_iam_role.lambda_dynamodb_role.arn
+  handler          = "bootstrap"
+  runtime          = "provided.al2"
+  source_code_hash = filebase64sha256("function.zip")
+
+  environment {
+    variables = {
+      DESTINATION_TABLE = aws_dynamodb_table.DeletedNilUsers.name
+    }
+  }
+}
+
+resource "aws_lambda_event_source_mapping" "dynamodb_stream_mapping" {
+  event_source_arn  = aws_dynamodb_table.NilUsersTable.stream_arn
+  function_name     = aws_lambda_function.dynamodb_stream_processor.arn
+  starting_position = "LATEST"
+}
 
 
 

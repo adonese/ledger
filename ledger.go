@@ -8,11 +8,14 @@ package ledger
 
 import (
 	"context"
+	"log"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -59,4 +62,33 @@ type LedgerEntry struct {
 	Time                int64   `dynamodbav:"Time" json:"time,omitempty"`
 	TenantID            string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
 	InitiatorUUID       string  `dynamodbav:"UUID" json:"uuid,omitempty"`
+}
+
+// DeleteAccount by its tenantID and accountID
+func DeleteAccount(ctx context.Context, dbSvc *dynamodb.Client, tenantId string, accountId string) error {
+	if tenantId == "" {
+		tenantId = "nil"
+	}
+
+	// Define the key for the item to delete
+	key := map[string]types.AttributeValue{
+		"TenantID":  &types.AttributeValueMemberS{Value: tenantId},
+		"AccountID": &types.AttributeValueMemberS{Value: accountId},
+	}
+
+	// Create the DeleteItem input
+	input := &dynamodb.DeleteItemInput{
+		TableName: aws.String(NilUsers),
+		Key:       key,
+	}
+
+	// Call DeleteItem operation
+	_, err := dbSvc.DeleteItem(ctx, input)
+	if err != nil {
+		log.Printf("Failed to delete account: %v", err)
+		return err
+	}
+
+	log.Println("Account deleted successfully")
+	return nil
 }
