@@ -20,6 +20,8 @@ type QRPaymentRequest struct {
 	Status       string  `json:"Status"`
 	UUID         string  `json:"UUID"`
 	CreationDate int64   `json:"CreationDate"`
+	FromAccount  string  `json:"from_account"`
+	ToAccount    string  `json:"to_account"`
 }
 
 func GenerateQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, accountID string, amount float64) (*QRPaymentRequest, error) {
@@ -35,6 +37,7 @@ func GenerateQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, ac
 		Status:       "PENDING",
 		UUID:         uuid,
 		CreationDate: timestamp,
+		ToAccount:    accountID,
 	}
 
 	av, err := attributevalue.MarshalMap(qrPayment)
@@ -82,7 +85,7 @@ func InquireQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, pay
 	return &qrPayment, nil
 }
 
-func PerformQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, paymentID, fromAccountID string) error {
+func PerformQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, paymentID, personPayingAccount string) error {
 	qrPayment, err := InquireQRPayment(ctx, dbSvc, tenantID, paymentID)
 	if err != nil {
 		return err
@@ -94,8 +97,8 @@ func PerformQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, pay
 
 	trEntry := TransactionEntry{
 		TenantID:      tenantID,
-		FromAccount:   fromAccountID,
-		AccountID:     fromAccountID,
+		FromAccount:   personPayingAccount,
+		AccountID:     qrPayment.ToAccount,
 		ToAccount:     qrPayment.AccountID,
 		Amount:        qrPayment.Amount,
 		InitiatorUUID: ksuid.New().String(),
