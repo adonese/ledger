@@ -312,6 +312,70 @@ resource "aws_lambda_event_source_mapping" "dynamodb_stream_mapping" {
 }
 
 
+# for qr based payments
+resource "aws_dynamodb_table" "qr_payments_table" {
+  name           = "QRPaymentsTable"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 5
+  write_capacity = 5
+  hash_key       = "TenantID"
+  range_key      = "PaymentID"
+
+  attribute {
+    name = "TenantID"
+    type = "S"
+  }
+
+  attribute {
+    name = "PaymentID"
+    type = "S"
+  }
+
+  attribute {
+    name = "UUID"
+    type = "S"
+  }
+
+  attribute {
+    name = "Status"
+    type = "S"
+  }
+
+
+  attribute {
+    name = "AccountID"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "UUIDIndex"
+    hash_key           = "TenantID"
+    range_key          = "UUID"
+    projection_type    = "ALL"
+    read_capacity      = 5
+    write_capacity     = 5
+  }
+
+  global_secondary_index {
+    name               = "StatusIndex"
+    hash_key           = "TenantID"
+    range_key          = "Status"
+    projection_type    = "ALL"
+    read_capacity      = 5
+    write_capacity     = 5
+  }
+
+  global_secondary_index {
+    name               = "AccountIDIndex"
+    hash_key           = "TenantID"
+    range_key          = "AccountID"
+    projection_type    = "ALL"
+    read_capacity      = 5
+    write_capacity     = 5
+  }
+}
+
+
 
 
 # variable "github_token" {}
