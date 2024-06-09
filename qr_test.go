@@ -2,8 +2,10 @@ package ledger
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,4 +42,33 @@ func TestQRPaymentFunctionalIntegration(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, inquiredPaymentAfter)
 	assert.Equal(t, "COMPLETED", inquiredPaymentAfter.Status)
+}
+
+func TestInquireQRPayment(t *testing.T) {
+	type args struct {
+		ctx       context.Context
+		dbSvc     *dynamodb.Client
+		tenantID  string
+		paymentID string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *QRPaymentRequest
+		wantErr bool
+	}{
+		{"inquire about a token", args{context.Background(), _dbSvc, "nil", "2hdIAOPyHPIwb9dUAxphRBx1WaJ"}, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := InquireQRPayment(tt.args.ctx, tt.args.dbSvc, tt.args.tenantID, tt.args.paymentID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("InquireQRPayment() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("InquireQRPayment() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
