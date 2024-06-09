@@ -57,7 +57,7 @@ func TestInquireQRPayment(t *testing.T) {
 		want    *QRPaymentRequest
 		wantErr bool
 	}{
-		{"inquire about a token", args{context.Background(), _dbSvc, "nil", "2hdIAOPyHPIwb9dUAxphRBx1WaJ"}, nil, false},
+		{"inquire about a token", args{context.Background(), _dbSvc, "nil", "2hdIAOLMzFJIElMoPZ3R9DGR3DQ"}, nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

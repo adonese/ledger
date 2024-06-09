@@ -30,13 +30,13 @@ func (qr *QRPaymentRequest) IsPaid() bool {
 }
 
 func GenerateQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, accountID string, amount float64) (*QRPaymentRequest, error) {
-	paymentID := ksuid.New().String()
+
 	uuid := ksuid.New().String()
 	timestamp := time.Now().UTC().Unix()
 
 	qrPayment := QRPaymentRequest{
 		TenantID:     tenantID,
-		PaymentID:    paymentID,
+		PaymentID:    uuid,
 		AccountID:    accountID,
 		Amount:       amount,
 		Status:       "PENDING",
@@ -65,8 +65,8 @@ func GenerateQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, ac
 
 func InquireQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, paymentID string) (*QRPaymentRequest, error) {
 	key := map[string]types.AttributeValue{
-		"TenantID": &types.AttributeValueMemberS{Value: tenantID},
-		"UUID":     &types.AttributeValueMemberS{Value: paymentID},
+		"TenantID":  &types.AttributeValueMemberS{Value: tenantID},
+		"PaymentID": &types.AttributeValueMemberS{Value: paymentID},
 	}
 
 	result, err := dbSvc.GetItem(ctx, &dynamodb.GetItemInput{
