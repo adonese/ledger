@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,6 +23,10 @@ type QRPaymentRequest struct {
 	CreationDate int64   `json:"CreationDate"`
 	FromAccount  string  `json:"from_account"`
 	ToAccount    string  `json:"to_account"`
+}
+
+func (qr *QRPaymentRequest) IsPaid() bool {
+	return qr.Status == "COMPLETED"
 }
 
 func GenerateQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, accountID string, amount float64) (*QRPaymentRequest, error) {
@@ -109,9 +114,7 @@ func PerformQRPayment(ctx context.Context, dbSvc *dynamodb.Client, tenantID, pay
 		return fmt.Errorf("failed to perform QR payment: %v", err)
 	}
 
-	if response.Status != "success" {
-		return fmt.Errorf("QR payment failed: %s", response.Message)
-	}
+	log.Printf("the result of transfer is: %+v", response)
 
 	updateExpression := "SET #st = :status"
 	expressionAttributeNames := map[string]string{
