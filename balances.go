@@ -98,6 +98,7 @@ func CreateAccountWithBalance(context context.Context, dbSvc *dynamodb.Client, t
 	if tenantId == "" {
 		tenantId = "nil" // default value for old clients
 	}
+	log.Printf("the tenant id is: %s", tenantId)
 	item := map[string]types.AttributeValue{
 		"AccountID":           &types.AttributeValueMemberS{Value: accountId},
 		"full_name":           &types.AttributeValueMemberS{Value: "test-account"},

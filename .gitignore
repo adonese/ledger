@@ -3,3 +3,10 @@ credentials.txt
 # terraform.tfstate
 # terraform.tfstate.backup
 .secrets.json
+cli/.secrets.json
+cli/cli
+cli/bootstrap*
+lambda
+lambdaddb
+lambdaddb.zip
+bootstrap*

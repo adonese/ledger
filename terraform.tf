@@ -377,6 +377,178 @@ resource "aws_dynamodb_table" "qr_payments_table" {
 
 
 
+# Escrow data 
+resource "aws_dynamodb_table" "escrow_meta" {
+name           = "EscrowMeta"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 7
+  write_capacity = 7
+  hash_key       = "TenantID"
+
+  attribute {
+    name = "TenantID"
+    type = "S"
+  }
+
+  attribute {
+    name = "Webhook"
+    type = "S"
+  }
+
+    global_secondary_index {
+    name               = "WebhookIndex"
+    hash_key           = "TenantID"
+    range_key          = "Webhook"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+}
+
+
+resource "aws_dynamodb_table" "escrow_transactions" {
+  name             = "EscrowTransactions"
+  billing_mode     = "PROVISIONED"
+  read_capacity    = 7
+  write_capacity   = 7
+  hash_key         = "UUID"
+  range_key        = "TransactionID"
+
+  attribute {
+    name = "UUID"
+    type = "S"
+  }
+
+  attribute {
+    name = "TransactionID"
+    type = "S"
+  }
+
+  attribute {
+    name = "TransactionDate"
+    type = "N"
+  }
+
+  attribute {
+    name = "FromAccount"
+    type = "S"
+  }
+
+  attribute {
+    name = "ToAccount"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "FromAccountIndex"
+    hash_key           = "UUID"
+    range_key          = "FromAccount"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+  global_secondary_index {
+    name               = "ToAccountIndex"
+    hash_key           = "UUID"
+    range_key          = "ToAccount"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+
+  global_secondary_index {
+    name               = "TransactionDateIndex"
+    hash_key           = "UUID"
+    range_key          = "TransactionDate"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+    global_secondary_index {
+    name               = "SystemID"
+    hash_key           = "TransactionID"
+    range_key          = "UUID"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+  stream_enabled = true
+  stream_view_type = "NEW_AND_OLD_IMAGES"
+
+
+}
+
+
+resource "aws_iam_role" "lambda_exec_role" {
+  name = "lambda_exec_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "lambda.amazonaws.com",
+        },
+      },
+    ],
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_exec_policy" {
+  name = "lambda_exec_policy"
+  role = aws_iam_role.lambda_exec_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "dynamodb:Scan",
+          "dynamodb:Query",
+          "dynamodb:GetItem",
+          "dynamodb:BatchGetItem",
+          "dynamodb:DescribeStream",
+          "dynamodb:GetRecords",
+          "dynamodb:GetShardIterator",
+          "dynamodb:ListStreams"
+        ],
+        Effect = "Allow",
+        Resource = [
+          "${aws_dynamodb_table.escrow_transactions.arn}",
+          "${aws_dynamodb_table.escrow_transactions.arn}/stream/*"
+        ],
+      },
+      {
+        Action = "logs:*",
+        Effect = "Allow",
+        Resource = "arn:aws:logs:*:*:*",
+      },
+    ],
+  })
+}
+
+resource "aws_lambda_function" "escrow_transaction_processor" {
+  filename         = "bootstrap"
+  function_name    = "escrow_transaction_processor"
+  role             = aws_iam_role.lambda_exec_role.arn
+  handler          = "main"
+  runtime          = "provided.al2023"
+  source_code_hash = filebase64sha256("bootstrap.zip")
+}
+
+resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
+  event_source_arn  = aws_dynamodb_table.escrow_transactions.stream_arn
+  function_name     = aws_lambda_function.escrow_transaction_processor.arn
+  starting_position = "LATEST"
+}
+
+
 
 # variable "github_token" {}
 

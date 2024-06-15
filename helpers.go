@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -33,4 +34,12 @@ func SaveToTransactionTable(dbSvc *dynamodb.Client, tenantId string, transaction
 	}
 
 	return nil
+}
+
+func getCurrentTimeZone() string {
+	// Get the current time in UTC
+	now := time.Now().UTC()
+
+	// Format the time to ISO 8601 format
+	return now.Format(time.RFC3339)
 }

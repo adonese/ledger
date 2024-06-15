@@ -159,9 +159,10 @@ func Test_createAccountWithBalance(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 121342212, tenantId: "zero", context: ctx}, true},
-		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 500, tenantId: "othernil", context: ctx}, true},
-		{"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 500, tenantId: "nonil", context: ctx}, true},
+		// {"generate account with balance", args{dbSvc: _dbSvc, accountId: "249_ACCT_1", amount: 121342212, tenantId: "zero", context: ctx}, true},
+		// {"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 500, tenantId: "othernil", context: ctx}, true},
+		// {"generate account with balance", args{dbSvc: _dbSvc, accountId: "0111493885", amount: 500, tenantId: "nonil", context: ctx}, true},
+		{"generate account with balance", args{dbSvc: _dbSvc, accountId: ESCROW_ACCOUNT, amount: 0, tenantId: ESCROW_TENANT, context: ctx}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

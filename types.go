@@ -166,3 +166,39 @@ type data struct {
 	SignedUUID    string  `json:"signed_uuid,omitempty"`
 	Currency      string  `json:"currency,omitempty"`
 }
+
+type EscrowTransaction struct {
+	SystemTransactionID string  `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
+	FromAccount         string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
+	ToAccount           string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
+	Amount              float64 `dynamodbav:"Amount" json:"amount"`
+	Comment             string  `dynamodbav:"Comment" json:"comment,omitempty"`
+	TransactionDate     int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
+	Status              Status  `dynamodbav:"TransactionStatus" json:"status,omitempty"`
+	FromTenantID        string  `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
+	ToTenantID          string  `dynamodbav:"ToTenantID" json:"to_tenant_id,omitempty"`
+	InitiatorUUID       string  `dynamodbav:"UUID" json:"uuid,omitempty"`
+	Timestamp           string  `dynamodbav:"timestamp" json:"timestamp,omitempty"`
+	SignedUUID          string  `dynamodbav:"signed_uuid" json:"signed_uuid,omitempty"`
+}
+
+type EscrowMeta struct {
+	TenantID           string   `dynamodbav:"TenantID" json:"from_tenant_id,omitempty"`
+	Webhook            string   `dynamodbav:"Webhook" json:"webhook,omitempty"`
+	AllowedTenants     []string `dynamodbav:"AllowedTenants" json:"allowed_tenants,omitempty"`
+	Currency           string   `dynamodbav:"Currency" json:"currency,omitempty"`
+	SupportsConversion bool     `dynamodbav:"SupportsConversion" json:"supports_conversion,omitempty"`
+}
+
+type EscrowEntry struct {
+	FromAccount       string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
+	ToAccount         string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
+	Amount            float64 `dynamodbav:"Amount" json:"amount"`
+	Comment           string  `dynamodbav:"Comment" json:"comment,omitempty"`
+	NotEscrowTenantID string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
+	InitiatorUUID     string  `dynamodbav:"UUID" json:"uuid,omitempty"`
+	Timestamp         string  `dynamodbav:"timestamp" json:"timestamp,omitempty"`
+	SignedUUID        string  `dynamodbav:"signed_uuid" json:"signed_uuid,omitempty"`
+	ToTenantID        string  `dynamodbav:"ToTenantID" json:"to_tenant_id,omitempty"`
+	FromTenantID      string  `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
+}
