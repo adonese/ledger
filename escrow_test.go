@@ -25,7 +25,7 @@ func TestEscrowRequest(t *testing.T) {
 		// 	Amount: 4, ToTenantID: ESCROW_TENANT, FromTenantID: "nil", InitiatorUUID: ksuid.New().String()}},
 		// 	NilResponse{}, false},
 		{"test nonil-nil", args{context.TODO(), _dbSvc, EscrowEntry{FromAccount: "0111493885", ToAccount: "0965256869",
-			Amount: 1, ToTenantID: "nil", FromTenantID: "nonil", InitiatorUUID: ksuid.New().String()}},
+			Amount: 4, ToTenantID: "nil", FromTenantID: "nonil", InitiatorUUID: ksuid.New().String()}},
 			NilResponse{}, false},
 	}
 	for _, tt := range tests {

@@ -60,5 +60,6 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 }
 
 func main() {
+	log.Println("The sns is launched again")
 	lambda.Start(handleSNSEvent)
 }

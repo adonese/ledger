@@ -529,7 +529,7 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
           "sns:Publish"
         ],
         Effect: "Allow",
-        Resource: "arn:aws:sns:us-east-1:123456789012:TransactionNotifications" // Replace with actual ARN
+        Resource: "arn:aws:sns:us-east-1:767397764981:TransactionNotifications"
       },
       {
         Action: "logs:*",
@@ -541,12 +541,12 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
 }
 
 resource "aws_lambda_function" "escrow_transaction_processor" {
-  filename         = "escrow.zip"
+  filename         = "cli/bootstrap.zip"
   function_name    = "escrow_transaction_processor"
   role             = aws_iam_role.lambda_exec_role.arn
   handler          = "bootstrap"
   runtime          = "provided.al2023"
-  source_code_hash = filebase64sha256("escrow.zip")
+  source_code_hash = filebase64sha256("cli/bootstrap.zip")
 }
 
 resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
@@ -574,12 +574,12 @@ resource "aws_sns_topic_subscription" "lambda_subscription" {
 }
 
 resource "aws_lambda_function" "webhook_notifier" {
-  filename         = "webhook_notifier.zip"
+  filename         = "cli/bootstrap.zip"
   function_name    = "webhook_notifier"
   role             = aws_iam_role.lambda_exec_role.arn
   handler          = "bootstrap"
   runtime          = "provided.al2023"
-  source_code_hash = filebase64sha256("webhook_notifier.zip")
+  source_code_hash = filebase64sha256("cli/bootstrap.zip")
 }
 
 
