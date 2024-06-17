@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const SNS_TOPIC = "arn:aws:sns:us-east-1:767397764981:TransactionNotifications"
+
 // SMS defines the structure for sending SMS notifications.
 // It includes the API key, sender information, recipient mobile number, message content,
 // and the SMS gateway URL.

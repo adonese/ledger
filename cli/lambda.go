@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
 //go:embed .secrets.json
@@ -30,6 +31,31 @@ type Data struct {
 var data Data
 
 var _dbSvc *dynamodb.Client
+var _snsSvc *sns.Client
+
+func init() {
+	// Initialize SNS client
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		log.Fatal("Failed to load config:", err)
+	}
+	_snsSvc = sns.NewFromConfig(cfg)
+}
+
+func publishToSNSTopic(transaction ledger.EscrowTransaction) error {
+	message, err := json.Marshal(transaction)
+	if err != nil {
+		return err
+	}
+
+	input := &sns.PublishInput{
+		Message:  aws.String(string(message)),
+		TopicArn: aws.String(ledger.SNS_TOPIC),
+	}
+
+	_, err = _snsSvc.Publish(context.TODO(), input)
+	return err
+}
 
 func init() {
 
@@ -105,6 +131,10 @@ func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
 					log.Printf("WE should fix this: %v", err)
 				}
 
+			}
+			// In handleRequest function, after updating the transaction
+			if err := publishToSNSTopic(transaction); err != nil {
+				log.Printf("failed to publish to SNS topic: %v", err)
 			}
 
 			// Now, i want to amend that table again to make the status as completed.

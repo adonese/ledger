@@ -86,7 +86,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 3.0"
+      version = "~> 5.0"
     }
   }
 }
@@ -295,7 +295,7 @@ resource "aws_lambda_function" "dynamodb_stream_processor" {
   function_name    = "dynamodb_stream_processor"
   role             = aws_iam_role.lambda_dynamodb_role.arn
   handler          = "bootstrap"
-  runtime          = "provided.al2"
+  runtime          = "provided.al2023"
   source_code_hash = filebase64sha256("function.zip")
 
   environment {
@@ -508,7 +508,7 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
     Version = "2012-10-17",
     Statement = [
       {
-        Action = [
+        Action: [
           "dynamodb:Scan",
           "dynamodb:Query",
           "dynamodb:GetItem",
@@ -518,28 +518,35 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
           "dynamodb:GetShardIterator",
           "dynamodb:ListStreams"
         ],
-        Effect = "Allow",
-        Resource = [
+        Effect: "Allow",
+        Resource: [
           "${aws_dynamodb_table.escrow_transactions.arn}",
           "${aws_dynamodb_table.escrow_transactions.arn}/stream/*"
         ],
       },
       {
-        Action = "logs:*",
-        Effect = "Allow",
-        Resource = "arn:aws:logs:*:*:*",
+        Action: [
+          "sns:Publish"
+        ],
+        Effect: "Allow",
+        Resource: "arn:aws:sns:us-east-1:123456789012:TransactionNotifications" // Replace with actual ARN
+      },
+      {
+        Action: "logs:*",
+        Effect: "Allow",
+        Resource: "arn:aws:logs:*:*:*",
       },
     ],
   })
 }
 
 resource "aws_lambda_function" "escrow_transaction_processor" {
-  filename         = "bootstrap"
+  filename         = "escrow.zip"
   function_name    = "escrow_transaction_processor"
   role             = aws_iam_role.lambda_exec_role.arn
-  handler          = "main"
+  handler          = "bootstrap"
   runtime          = "provided.al2023"
-  source_code_hash = filebase64sha256("bootstrap.zip")
+  source_code_hash = filebase64sha256("escrow.zip")
 }
 
 resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
@@ -547,6 +554,34 @@ resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
   function_name     = aws_lambda_function.escrow_transaction_processor.arn
   starting_position = "LATEST"
 }
+
+resource "aws_sns_topic" "transaction_notifications" {
+  name = "TransactionNotifications"
+}
+
+resource "aws_lambda_permission" "allow_sns" {
+  statement_id  = "AllowExecutionFromSNS"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.webhook_notifier.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.transaction_notifications.arn
+}
+
+resource "aws_sns_topic_subscription" "lambda_subscription" {
+  topic_arn = aws_sns_topic.transaction_notifications.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.webhook_notifier.arn
+}
+
+resource "aws_lambda_function" "webhook_notifier" {
+  filename         = "webhook_notifier.zip"
+  function_name    = "webhook_notifier"
+  role             = aws_iam_role.lambda_exec_role.arn
+  handler          = "bootstrap"
+  runtime          = "provided.al2023"
+  source_code_hash = filebase64sha256("webhook_notifier.zip")
+}
+
 
 
 

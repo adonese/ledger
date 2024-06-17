@@ -5,8 +5,13 @@ credentials.txt
 .secrets.json
 cli/.secrets.json
 cli/cli
+cli/escrow*
+escrow.zip
 cli/bootstrap*
 lambda
 lambdaddb
 lambdaddb.zip
 bootstrap*
+sns/sns
+sns/webhook_notifier*
+webhook_notifier*
