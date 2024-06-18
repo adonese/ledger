@@ -482,7 +482,61 @@ resource "aws_dynamodb_table" "escrow_transactions" {
 
 }
 
+# aws lambda sqs iam
+resource "aws_iam_role" "sqs_lambda_exec_role" {
+  name = "sqs_lambda_exec_role"
 
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+
+resource "aws_iam_policy" "sqs_lambda_exec_policy" {
+  name = "sqs_lambda_exec_policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+        ],
+        Resource = [
+          aws_sqs_queue.sns_queue.arn,
+          aws_sqs_queue.sns_dlq.arn
+        ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "sqs_lambda_policy_attach" {
+  role       = aws_iam_role.sqs_lambda_exec_role.name
+  policy_arn = aws_iam_policy.sqs_lambda_exec_policy.arn
+}
+
+# aws sns and lambda iam
 resource "aws_iam_role" "lambda_exec_role" {
   name = "lambda_exec_role"
 
@@ -555,9 +609,69 @@ resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
   starting_position = "LATEST"
 }
 
+# send sns topic, this will fan out to lambda, sqs, and others
 resource "aws_sns_topic" "transaction_notifications" {
   name = "TransactionNotifications"
 }
+
+
+resource "aws_sqs_queue" "sns_queue" {
+  name                       = "sns-queue"
+  visibility_timeout_seconds = 30
+  message_retention_seconds  = 86400
+}
+
+resource "aws_sqs_queue" "sns_dlq" {
+  name                       = "sns-dlq"
+  message_retention_seconds  = 1209600
+}
+
+resource "aws_sqs_queue_policy" "sns_queue_policy" {
+  queue_url = aws_sqs_queue.sns_queue.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = "*",
+        Action   = "sqs:SendMessage",
+        Resource = aws_sqs_queue.sns_queue.arn,
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_sns_topic.transaction_notifications.arn
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_sns_topic_subscription" "sns_to_sqs" {
+  topic_arn = aws_sns_topic.transaction_notifications.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.sns_queue.arn
+}
+
+# lambda to process sqs. we should use this instead of lambda from sns
+resource "aws_lambda_function" "sqs_processor" {
+  filename         = "sqs/bootstrap.zip"
+  function_name    = "SQSProcessor"
+  role             = aws_iam_role.sqs_lambda_exec_role.arn
+  handler          = "bootstrap"
+  runtime          = "provided.al2023"
+  source_code_hash = filebase64sha256("sqs/bootstrap.zip")
+}
+
+resource "aws_lambda_event_source_mapping" "sqs_lambda_mapping" {
+  event_source_arn = aws_sqs_queue.sns_queue.arn
+  function_name    = aws_lambda_function.sqs_processor.arn
+  batch_size       = 10
+  enabled          = true
+}
+
+
+
 
 resource "aws_lambda_permission" "allow_sns" {
   statement_id  = "AllowExecutionFromSNS"
