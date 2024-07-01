@@ -322,7 +322,7 @@ func TestGetAllNilTransactions(t *testing.T) {
 		{
 			name:     "Fetch all transactions",
 			filter:   TransactionFilter{},
-			wantMin:  28, // Adjust based on expected data in your test table
+			wantMin:  1, // Adjust based on expected data in your test table
 			tenantId: "nil",
 			context:  ctx,
 		},

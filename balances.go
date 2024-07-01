@@ -591,53 +591,76 @@ func getTransactionsByIndex(context context.Context, dbSvc *dynamodb.Client, ten
 }
 
 func GetAllNilTransactions(ctx context.Context, dbSvc *dynamodb.Client, tenantId string, filter TransactionFilter) ([]TransactionEntry, map[string]types.AttributeValue, error) {
-
 	if tenantId == "" {
 		tenantId = "nil"
 	}
-	var filterExpression strings.Builder
-	expressionAttributeValues := map[string]types.AttributeValue{}
 
-	// Add TenantID to filter expression
-	filterExpression.WriteString("TenantID = :tenantId")
-	expressionAttributeValues[":tenantId"] = &types.AttributeValueMemberS{Value: tenantId}
+	expressionAttributeValues := map[string]types.AttributeValue{
+		":tenantId": &types.AttributeValueMemberS{Value: tenantId},
+	}
+	expressionAttributeNames := map[string]string{
+		"#tenantID": "TenantID",
+	}
 
-	// Building filter expressions
+	keyConditionExpression := "#tenantID = :tenantId"
+	filterExpressions := []string{}
+
+	// Determine which index to use based on the filter
+	var indexName *string
 	if filter.AccountID != "" {
-		filterExpression.WriteString(" AND (FromAccount = :accountID OR ToAccount = :accountID)")
+		// Since we can't determine if it's FromAccount or ToAccount, we'll use a filter expression
+		filterExpressions = append(filterExpressions, "(#fromAccount = :accountID OR #toAccount = :accountID)")
+		expressionAttributeNames["#fromAccount"] = "FromAccount"
+		expressionAttributeNames["#toAccount"] = "ToAccount"
 		expressionAttributeValues[":accountID"] = &types.AttributeValueMemberS{Value: filter.AccountID}
 	}
 
-	if filter.TransactionStatus != nil {
-		filterExpression.WriteString(" AND TransactionStatus = :transactionStatus")
-		expressionAttributeValues[":transactionStatus"] = &types.AttributeValueMemberN{Value: strconv.Itoa(*filter.TransactionStatus)}
-	}
-
 	if filter.StartTime != 0 && filter.EndTime != 0 {
-		filterExpression.WriteString(" AND TransactionDate BETWEEN :startTime AND :endTime")
+		indexName = aws.String("TransactionDateIndex")
+		keyConditionExpression += " AND #transactionDate BETWEEN :startTime AND :endTime"
+		expressionAttributeNames["#transactionDate"] = "TransactionDate"
 		expressionAttributeValues[":startTime"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(filter.StartTime, 10)}
 		expressionAttributeValues[":endTime"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(filter.EndTime, 10)}
+	}
+
+	if filter.TransactionStatus != nil {
+		filterExpressions = append(filterExpressions, "#transactionStatus = :transactionStatus")
+		expressionAttributeNames["#transactionStatus"] = "TransactionStatus"
+		expressionAttributeValues[":transactionStatus"] = &types.AttributeValueMemberN{Value: strconv.Itoa(*filter.TransactionStatus)}
 	}
 
 	if filter.Limit == 0 {
 		filter.Limit = 25
 	}
 
-	scanInput := &dynamodb.ScanInput{
+	queryInput := &dynamodb.QueryInput{
 		TableName:                 aws.String("TransactionsTable"),
-		Limit:                     aws.Int32(filter.Limit),
-		FilterExpression:          aws.String(filterExpression.String()),
+		IndexName:                 indexName,
+		KeyConditionExpression:    aws.String(keyConditionExpression),
+		ExpressionAttributeNames:  expressionAttributeNames,
 		ExpressionAttributeValues: expressionAttributeValues,
+		Limit:                     aws.Int32(filter.Limit),
+		ScanIndexForward:          aws.Bool(false), // To get the most recent transactions first
+	}
+
+	if len(filterExpressions) > 0 {
+		queryInput.FilterExpression = aws.String(strings.Join(filterExpressions, " AND "))
 	}
 
 	if len(filter.LastEvaluatedKey) > 0 {
-		scanInput.ExclusiveStartKey = filter.LastEvaluatedKey
+		queryInput.ExclusiveStartKey = filter.LastEvaluatedKey
 	}
 
-	output, err := dbSvc.Scan(ctx, scanInput)
+	// Debug: Print the query input
+	fmt.Printf("Query Input: %+v\n", queryInput)
+
+	output, err := dbSvc.Query(ctx, queryInput)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch transactions: %v", err)
 	}
+
+	// Debug: Print the number of items returned
+	fmt.Printf("Number of items returned: %d\n", len(output.Items))
 
 	var transactions []TransactionEntry
 	err = attributevalue.UnmarshalListOfMaps(output.Items, &transactions)
