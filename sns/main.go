@@ -38,7 +38,7 @@ func handleSNSEvent(ctx context.Context, snsEvent events.SNSEvent) {
 	}
 }
 
-func getServiceProvider(ctx context.Context, client *dynamodb.Client, tenantID string) (*ServiceProvider, error) {
+func getServiceProvider(ctx context.Context, client *dynamodb.Client, tenantID string) (*ledger.ServiceProvider, error) {
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String("ServiceProviders"),
 		Key: map[string]types.AttributeValue{
