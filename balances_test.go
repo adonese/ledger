@@ -2,13 +2,12 @@ package ledger
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"log"
 	"os"
 	"reflect"
 	"testing"
-
-	_ "embed"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -16,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -82,8 +80,11 @@ func Test_transferCredits(t *testing.T) {
 		// 6224
 		// 6224
 		// there's a severe bug in transfering credits
-		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493885", dbSvc: _dbSvc, amount: 67, tenantId: "zero", context: ctx}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0123456789", dbSvc: _dbSvc, amount: 1000_000, tenantId: "nil", context: ctx}, false},
 		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", dbSvc: _dbSvc, amount: 10000, tenantId: "nil", context: ctx}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0123137165", dbSvc: _dbSvc, amount: 1_0000_000, tenantId: "nil", context: ctx}, false},
+		{"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0906230362", dbSvc: _dbSvc, amount: 1_0000_000, tenantId: "nil", context: ctx}, false},
+
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "0111493888", dbSvc: _dbSvc, amount: 10000, tenantId: "noooon"}, true},
 		// {"testing transfer", args{fromAccountID: "0111493885", toAccountID: "151515", dbSvc: _dbSvc, amount: 323222121}, false},
 		// {"testing transfer", args{fromAccountID: "249_ACCT_1", toAccountID: "12", dbSvc: _dbSvc, amount: 151}, false},
@@ -128,8 +129,8 @@ func Test_inquireBalance(t *testing.T) {
 		want    float64
 		wantErr bool
 	}{
-		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0111498888", tenantId: "", context: ctx}, 30, false},
-		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "249_ACCT_1", tenantId: "", context: ctx}, 2636, false},
+		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0111498888", tenantId: "nil", context: ctx}, 30, false},
+		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0123456789", tenantId: "nil", context: ctx}, 2636, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -490,6 +491,34 @@ func TestTransferCredits(t *testing.T) {
 
 			assert.Equal(t, tt.afterFrom, fromAccountBalanceAfter, "After fromAccount balance should match")
 			assert.Equal(t, tt.afterTo, toAccountBalanceAfter, "After toAccount balance should match")
+		})
+	}
+}
+
+func TestGetAccount(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		dbSvc   *dynamodb.Client
+		trEntry TransactionEntry
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *User
+		wantErr bool
+	}{
+		{"retrieves an accountt", args{ctx: context.TODO(), dbSvc: _dbSvc, trEntry: TransactionEntry{AccountID: "0111493888"}}, &User{AccountID: "0111493888"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetAccount(tt.args.ctx, tt.args.dbSvc, tt.args.trEntry)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAccount() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetAccount() = %+v, want %+v", got, tt.want)
+			}
 		})
 	}
 }

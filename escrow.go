@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -24,6 +25,49 @@ const (
 	StatusFailed
 	StatusInProgress
 )
+
+// Map from string to Status
+var statusStringToEnum = map[string]Status{
+	"Pending":    StatusPending,
+	"Completed":  StatusCompleted,
+	"Failed":     StatusFailed,
+	"InProgress": StatusInProgress,
+}
+
+// Map from Status to string (optional, for marshalling)
+var statusEnumToString = map[Status]string{
+	StatusPending:    "Pending",
+	StatusCompleted:  "Completed",
+	StatusFailed:     "Failed",
+	StatusInProgress: "InProgress",
+}
+
+// UnmarshalDynamoDBAttributeValue implements custom unmarshalling for Status
+func (s *Status) UnmarshalDynamoDBAttributeValue(av types.AttributeValue) error {
+	// Assert that the attribute value is of type *types.AttributeValueMemberS
+	value, ok := av.(*types.AttributeValueMemberS)
+	if !ok {
+		return fmt.Errorf("attribute value is not a string")
+	}
+
+	status, ok := statusStringToEnum[value.Value]
+	if !ok {
+		return fmt.Errorf("unknown status: %s", value.Value)
+	}
+
+	*s = status
+	return nil
+}
+
+// Optional: Implement MarshalDynamoDBAttributeValue for consistency
+// func (s Status) MarshalDynamoDBAttributeValue() (types.AttributeValue, error) {
+// 	str, ok := statusEnumToString[s]
+// 	if !ok {
+// 		return nil, fmt.Errorf("unknown status: %d", s)
+// 	}
+
+// 	return &types.AttributeValueMemberS{Value: str}, nil
+// }
 
 const EscrowTransactionsTable = "EscrowTransactions"
 const ESCROW_ACCOUNT = "NIL_ESCROW_ACCOUNT"
@@ -326,4 +370,33 @@ func EscrowTransferCredits(context context.Context, dbSvc *dynamodb.Client, trEn
 	}
 
 	return response, nil
+}
+
+func GetEscrowTransactions(ctx context.Context, dbSvc *dynamodb.Client, tenantID string) ([]EscrowTransaction, error) {
+	indexName := "FromTenantIDIndex"
+	input := &dynamodb.QueryInput{
+		TableName: aws.String("EscrowTransactions"),
+		IndexName: aws.String(indexName), // Use the appropriate GSI
+		KeyConditions: map[string]types.Condition{
+			"FromTenantID": {
+				ComparisonOperator: types.ComparisonOperatorEq,
+				AttributeValueList: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: tenantID},
+				},
+			},
+		},
+	}
+
+	result, err := dbSvc.Query(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query transactions: %w", err)
+	}
+
+	var transactions []EscrowTransaction
+	if err := attributevalue.UnmarshalListOfMaps(result.Items, &transactions); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal transactions: %w", err)
+	}
+
+	log.Printf("the items are: %+v", transactions)
+	return transactions, nil
 }

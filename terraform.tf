@@ -439,6 +439,16 @@ resource "aws_dynamodb_table" "escrow_transactions" {
     type = "S"
   }
 
+
+ attribute {
+    name = "FromTenantID"
+    type = "S"
+  }
+
+  attribute {
+    name = "ToTenantID"
+    type = "S"
+  }
   global_secondary_index {
     name               = "FromAccountIndex"
     hash_key           = "UUID"
@@ -471,6 +481,24 @@ resource "aws_dynamodb_table" "escrow_transactions" {
     name               = "SystemID"
     hash_key           = "TransactionID"
     range_key          = "UUID"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+  global_secondary_index {
+    name               = "FromTenantIDIndex"
+    hash_key           = "FromTenantID"
+    range_key          = "TransactionID"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
+  }
+
+  global_secondary_index {
+    name               = "ToTenantIDIndex"
+    hash_key           = "ToTenantID"
+    range_key          = "TransactionID"
     projection_type    = "ALL"
     read_capacity      = 7
     write_capacity     = 7
@@ -575,7 +603,8 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
         Effect: "Allow",
         Resource: [
           "${aws_dynamodb_table.escrow_transactions.arn}",
-          "${aws_dynamodb_table.escrow_transactions.arn}/stream/*"
+          "${aws_dynamodb_table.escrow_transactions.arn}/stream/*",
+          "${aws_dynamodb_table.service_providers.arn}" // read service_providers table
         ],
       },
       {
@@ -593,6 +622,7 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
     ],
   })
 }
+
 
 resource "aws_lambda_function" "escrow_transaction_processor" {
   filename         = "cli/bootstrap.zip"
@@ -696,6 +726,19 @@ resource "aws_lambda_function" "webhook_notifier" {
   source_code_hash = filebase64sha256("cli/bootstrap.zip")
 }
 
+
+resource "aws_dynamodb_table" "service_providers" {
+  name           = "ServiceProviders"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 7
+  write_capacity = 7
+  hash_key       = "TenantID"
+
+  attribute {
+    name = "TenantID"
+    type = "S"
+  }
+}
 
 
 

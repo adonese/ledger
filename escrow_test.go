@@ -45,3 +45,32 @@ func TestEscrowRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEscrowTransactions(t *testing.T) {
+	type args struct {
+		ctx      context.Context
+		dbSvc    *dynamodb.Client
+		tenantID string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []EscrowTransaction
+		wantErr bool
+	}{
+		{"test nil tenant", args{context.TODO(), _dbSvc, "nil"}, []EscrowTransaction{}, false},
+		{"test nonil tenant", args{context.TODO(), _dbSvc, "nonil"}, []EscrowTransaction{}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetEscrowTransactions(tt.args.ctx, tt.args.dbSvc, tt.args.tenantID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetEscrowTransactions() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetEscrowTransactions() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
