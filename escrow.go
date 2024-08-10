@@ -400,3 +400,49 @@ func GetEscrowTransactions(ctx context.Context, dbSvc *dynamodb.Client, tenantID
 	log.Printf("the items are: %+v", transactions)
 	return transactions, nil
 }
+
+func GetServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID string) (*ServiceProvider, error) {
+	input := &dynamodb.GetItemInput{
+		TableName: aws.String("ServiceProviders"),
+		Key: map[string]types.AttributeValue{
+			"TenantID": &types.AttributeValueMemberS{Value: tenantID},
+		},
+	}
+
+	result, err := dbSvc.GetItem(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service provider: %w", err)
+	}
+
+	if result.Item == nil {
+		return nil, fmt.Errorf("service provider with TenantID %s not found", tenantID)
+	}
+
+	var serviceProvider ServiceProvider
+	if err := attributevalue.UnmarshalMap(result.Item, &serviceProvider); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal service provider: %w", err)
+	}
+
+	return &serviceProvider, nil
+}
+
+func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID string, webhook string) error {
+	input := &dynamodb.UpdateItemInput{
+		TableName: aws.String("ServiceProviders"),
+		Key: map[string]types.AttributeValue{
+			"TenantID": &types.AttributeValueMemberS{Value: tenantID},
+		},
+		UpdateExpression: aws.String("SET WebhookURL = :webhook_url"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":webhook_url": &types.AttributeValueMemberS{Value: webhook},
+		},
+		ReturnValues: types.ReturnValueUpdatedNew,
+	}
+
+	_, err := dbSvc.UpdateItem(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to update service provider: %w", err)
+	}
+
+	return nil
+}

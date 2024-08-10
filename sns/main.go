@@ -38,13 +38,6 @@ func handleSNSEvent(ctx context.Context, snsEvent events.SNSEvent) {
 	}
 }
 
-type ServiceProvider struct {
-	TenantID     string `json:"tenant_id"`
-	WebhookURL   string `json:"webhook_url"`
-	TailscaleURL string `json:"tailscale_url"`
-	LastAccessed string `json:"last_accessed"`
-}
-
 func getServiceProvider(ctx context.Context, client *dynamodb.Client, tenantID string) (*ServiceProvider, error) {
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String("ServiceProviders"),
@@ -62,7 +55,7 @@ func getServiceProvider(ctx context.Context, client *dynamodb.Client, tenantID s
 		return nil, fmt.Errorf("no item found for tenant_id: %s", tenantID)
 	}
 
-	serviceProvider := &ServiceProvider{
+	serviceProvider := &ledger.ServiceProvider{
 		TenantID:     tenantID,
 		WebhookURL:   result.Item["WebhookURL"].(*types.AttributeValueMemberS).Value,
 		TailscaleURL: result.Item["TailscaleURL"].(*types.AttributeValueMemberS).Value,

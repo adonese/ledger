@@ -204,3 +204,10 @@ type EscrowEntry struct {
 	ToTenantID        string  `dynamodbav:"ToTenantID" json:"to_tenant_id,omitempty"`
 	FromTenantID      string  `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
 }
+
+type ServiceProvider struct {
+	TenantID     string `json:"tenant_id"`
+	WebhookURL   string `json:"webhook_url"`
+	TailscaleURL string `json:"tailscale_url"`
+	LastAccessed string `json:"last_accessed"`
+}
