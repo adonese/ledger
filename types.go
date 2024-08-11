@@ -206,8 +206,10 @@ type EscrowEntry struct {
 }
 
 type ServiceProvider struct {
-	TenantID     string `json:"tenant_id"`
-	WebhookURL   string `json:"webhook_url"`
-	TailscaleURL string `json:"tailscale_url"`
-	LastAccessed string `json:"last_accessed"`
+	TenantID     string `dynamodbav:"TenantID" json:"tenant_id"`
+	WebhookURL   string `dynamodbav:"WebhookURL" json:"webhook_url"`
+	TailscaleURL string `dynamodbav:"TailscaleURL" json:"tailscale_url"`
+	LastAccessed string `dynamodbav:"LastAccessed" json:"last_accessed"`
+	Currency     string `dynamodbav:"Currency" json:"currency"`
+	PublicKey    string `dynamodbav:"PublicKey" json:"public_key"`
 }

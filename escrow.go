@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -401,6 +402,34 @@ func GetEscrowTransactions(ctx context.Context, dbSvc *dynamodb.Client, tenantID
 	return transactions, nil
 }
 
+func CreateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, serviceProvider ServiceProvider) error {
+	// Marshal the ServiceProvider struct into a DynamoDB item
+	serviceProvider.LastAccessed = time.Now().Format(time.RFC3339)
+	item, err := attributevalue.MarshalMap(serviceProvider)
+	if err != nil {
+		return fmt.Errorf("failed to marshal service provider: %w", err)
+	}
+
+	// Create the PutItem input with a condition expression to ensure TenantID is unique
+	input := &dynamodb.PutItemInput{
+		TableName:           aws.String("ServiceProviders"),
+		Item:                item,
+		ConditionExpression: aws.String("attribute_not_exists(TenantID)"), // Ensure TenantID is unique
+	}
+
+	// Execute the PutItem operation
+	_, err = dbSvc.PutItem(ctx, input)
+	if err != nil {
+		var conditionalCheckFailedErr *types.ConditionalCheckFailedException
+		if errors.As(err, &conditionalCheckFailedErr) {
+			return fmt.Errorf("service provider with TenantID %s already exists", serviceProvider.TenantID)
+		}
+		return fmt.Errorf("failed to create service provider: %w", err)
+	}
+
+	return nil
+}
+
 func GetServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID string) (*ServiceProvider, error) {
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String("ServiceProviders"),
@@ -426,17 +455,44 @@ func GetServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID st
 	return &serviceProvider, nil
 }
 
-func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID string, webhook string) error {
+func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID string, svcProvider ServiceProvider) error {
+	// Initialize an empty update expression and attribute values map
+	updateExpression := "SET"
+	expressionAttributeValues := make(map[string]types.AttributeValue)
+
+	// Conditionally add to the update expression and attribute values
+	if svcProvider.WebhookURL != "" {
+		updateExpression += " WebhookURL = :webhook_url,"
+		expressionAttributeValues[":webhook_url"] = &types.AttributeValueMemberS{Value: svcProvider.WebhookURL}
+	}
+
+	if svcProvider.TailscaleURL != "" {
+		updateExpression += " TailscaleURL = :tailscale_url,"
+		expressionAttributeValues[":tailscale_url"] = &types.AttributeValueMemberS{Value: svcProvider.TailscaleURL}
+	}
+
+	if svcProvider.PublicKey != "" {
+		updateExpression += " PublicKey = :public_key,"
+		expressionAttributeValues[":public_key"] = &types.AttributeValueMemberS{Value: svcProvider.PublicKey}
+	}
+
+	// Trim the trailing comma from the update expression
+	updateExpression = updateExpression[:len(updateExpression)-1]
+
+	// If there's nothing to update, return early
+	if len(expressionAttributeValues) == 0 {
+		return fmt.Errorf("no fields to update")
+	}
+
+	// Create the update item input with the dynamically built expression
 	input := &dynamodb.UpdateItemInput{
 		TableName: aws.String("ServiceProviders"),
 		Key: map[string]types.AttributeValue{
 			"TenantID": &types.AttributeValueMemberS{Value: tenantID},
 		},
-		UpdateExpression: aws.String("SET WebhookURL = :webhook_url"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":webhook_url": &types.AttributeValueMemberS{Value: webhook},
-		},
-		ReturnValues: types.ReturnValueUpdatedNew,
+		UpdateExpression:          aws.String(updateExpression),
+		ExpressionAttributeValues: expressionAttributeValues,
+		ReturnValues:              types.ReturnValueUpdatedNew,
 	}
 
 	_, err := dbSvc.UpdateItem(ctx, input)

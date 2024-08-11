@@ -108,22 +108,46 @@ func TestGetServiceProvider(t *testing.T) {
 
 func TestUpdateServiceProvider(t *testing.T) {
 	type args struct {
-		ctx      context.Context
-		dbSvc    *dynamodb.Client
-		tenantID string
-		webhook  string
+		ctx         context.Context
+		dbSvc       *dynamodb.Client
+		tenantID    string
+		svcProvider ServiceProvider
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
-		{"test nil tenant", args{context.TODO(), _dbSvc, "nil", "http://localhost:8080"}, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, "nil", ServiceProvider{WebhookURL: "http://localhost:8080"}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := UpdateServiceProvider(tt.args.ctx, tt.args.dbSvc, tt.args.tenantID, tt.args.webhook); (err != nil) != tt.wantErr {
+			if err := UpdateServiceProvider(tt.args.ctx, tt.args.dbSvc, tt.args.tenantID, tt.args.svcProvider); (err != nil) != tt.wantErr {
 				t.Errorf("UpdateServiceProvider() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCreateServiceProvider(t *testing.T) {
+	type args struct {
+		ctx             context.Context
+		dbSvc           *dynamodb.Client
+		serviceProvider ServiceProvider
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		// create with public key
+		{"test nil tenant", args{context.TODO(), _dbSvc, ServiceProvider{TenantID: "11nil", WebhookURL: "http://localhost:8080"}}, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, ServiceProvider{TenantID: "nil", WebhookURL: "http://localhost:8089"}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := CreateServiceProvider(tt.args.ctx, tt.args.dbSvc, tt.args.serviceProvider); (err != nil) != tt.wantErr {
+				t.Errorf("CreateServiceProvider() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
