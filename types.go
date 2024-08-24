@@ -2,6 +2,8 @@ package ledger
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -169,19 +171,30 @@ type data struct {
 	Currency      string  `json:"currency,omitempty"`
 }
 
+type Beneficiary struct {
+	AccountID string `dynamodbav:"AccountID" json:"account_id,omitempty"`
+	FullName  string `dynamodbav:"FullName" json:"full_name,omitempty"`
+	Mobile    string `dynamodbav:"Mobile" json:"mobile,omitempty"`
+	Provider  string `dynamodbav:"Provider" json:"provider,omitempty"`
+	Address   string `dynamodbav:"Address" json:"address,omitempty"`
+}
 type EscrowTransaction struct {
-	SystemTransactionID string  `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
-	FromAccount         string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
-	ToAccount           string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
-	Amount              float64 `dynamodbav:"Amount" json:"amount"`
-	Comment             string  `dynamodbav:"Comment" json:"comment,omitempty"`
-	TransactionDate     int64   `dynamodbav:"TransactionDate" json:"time,omitempty"`
-	Status              Status  `dynamodbav:"TransactionStatus" json:"status,omitempty"`
-	FromTenantID        string  `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
-	ToTenantID          string  `dynamodbav:"ToTenantID" json:"to_tenant_id,omitempty"`
-	InitiatorUUID       string  `dynamodbav:"UUID" json:"uuid,omitempty"`
-	Timestamp           string  `dynamodbav:"timestamp" json:"timestamp,omitempty"`
-	SignedUUID          string  `dynamodbav:"signed_uuid" json:"signed_uuid,omitempty"`
+	SystemTransactionID string      `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
+	FromAccount         string      `dynamodbav:"FromAccount" json:"from_account,omitempty"`
+	ToAccount           string      `dynamodbav:"ToAccount" json:"to_account,omitempty"`
+	Amount              float64     `dynamodbav:"Amount" json:"amount"`
+	Comment             string      `dynamodbav:"Comment" json:"comment,omitempty"`
+	TransactionDate     int64       `dynamodbav:"TransactionDate" json:"time,omitempty"`
+	Status              Status      `dynamodbav:"TransactionStatus" json:"status,omitempty"`
+	FromTenantID        string      `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
+	ToTenantID          string      `dynamodbav:"ToTenantID" json:"to_tenant_id,omitempty"`
+	InitiatorUUID       string      `dynamodbav:"UUID" json:"uuid,omitempty"`
+	Timestamp           string      `dynamodbav:"timestamp" json:"timestamp,omitempty"`
+	SignedUUID          string      `dynamodbav:"signed_uuid" json:"signed_uuid,omitempty"`
+	CashoutProvider     string      `dynamodbav:"CashoutProvider" json:"cashout_provider,omitempty"`
+	Beneficiary         Beneficiary `dynamodbav:"Beneficiary" json:"beneficiary,omitempty"`
+	TransientAccount    string      `dynamodbav:"TransientAccount" json:"transient_account,omitempty"`
+	TransientTenant     string      `dynamodbav:"TransientTenant" json:"transient_tenant,omitempty"`
 }
 
 type EscrowMeta struct {
@@ -193,16 +206,18 @@ type EscrowMeta struct {
 }
 
 type EscrowEntry struct {
-	FromAccount       string  `dynamodbav:"FromAccount" json:"from_account,omitempty"`
-	ToAccount         string  `dynamodbav:"ToAccount" json:"to_account,omitempty"`
-	Amount            float64 `dynamodbav:"Amount" json:"amount"`
-	Comment           string  `dynamodbav:"Comment" json:"comment,omitempty"`
-	NotEscrowTenantID string  `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
-	InitiatorUUID     string  `dynamodbav:"UUID" json:"uuid,omitempty"`
-	Timestamp         string  `dynamodbav:"timestamp" json:"timestamp,omitempty"`
-	SignedUUID        string  `dynamodbav:"signed_uuid" json:"signed_uuid,omitempty"`
-	ToTenantID        string  `dynamodbav:"ToTenantID" json:"to_tenant_id,omitempty"`
-	FromTenantID      string  `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
+	FromAccount       string      `dynamodbav:"FromAccount" json:"from_account,omitempty"`
+	ToAccount         string      `dynamodbav:"ToAccount" json:"to_account,omitempty"`
+	Amount            float64     `dynamodbav:"Amount" json:"amount"`
+	Comment           string      `dynamodbav:"Comment" json:"comment"`
+	NotEscrowTenantID string      `dynamodbav:"TenantID" json:"tenant_id,omitempty"`
+	InitiatorUUID     string      `dynamodbav:"UUID" json:"uuid,omitempty"`
+	Timestamp         string      `dynamodbav:"timestamp" json:"timestamp"`
+	SignedUUID        string      `dynamodbav:"signed_uuid" json:"signed_uuid,omitempty"`
+	ToTenantID        string      `dynamodbav:"ToTenantID" json:"to_tenant_id,omitempty"`
+	FromTenantID      string      `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
+	CashoutProvider   string      `dynamodbav:"CashoutProvider" json:"cashout_provider"`
+	Beneficiary       Beneficiary `dynamodbav:"Beneficiary" json:"beneficiary"`
 }
 
 type ServiceProvider struct {
@@ -212,4 +227,60 @@ type ServiceProvider struct {
 	LastAccessed string `dynamodbav:"LastAccessed" json:"last_accessed"`
 	Currency     string `dynamodbav:"Currency" json:"currency"`
 	PublicKey    string `dynamodbav:"PublicKey" json:"public_key"`
+}
+
+// Status represents the status of a transaction
+type Status int
+
+// Define possible statuses
+const (
+	StatusPending Status = iota
+	StatusCompleted
+	StatusFailed
+	StatusInProgress
+)
+
+// Map from string to Status
+var statusStringToEnum = map[string]Status{
+	"Pending":    StatusPending,
+	"Completed":  StatusCompleted,
+	"Failed":     StatusFailed,
+	"InProgress": StatusInProgress,
+}
+
+// Map from Status to string (optional, for marshalling)
+var statusEnumToString = map[Status]string{
+	StatusPending:    "Pending",
+	StatusCompleted:  "Completed",
+	StatusFailed:     "Failed",
+	StatusInProgress: "InProgress",
+}
+
+// UnmarshalDynamoDBAttributeValue implements custom unmarshalling for Status
+func (s *Status) UnmarshalDynamoDBAttributeValue(av types.AttributeValue) error {
+	switch v := av.(type) {
+	case *types.AttributeValueMemberS:
+		if status, ok := statusStringToEnum[v.Value]; ok {
+			*s = status
+			return nil
+		}
+		return fmt.Errorf("unknown status string: %s", v.Value)
+	case *types.AttributeValueMemberN:
+		i, err := strconv.Atoi(v.Value)
+		if err != nil {
+			return fmt.Errorf("failed to parse status number: %v", err)
+		}
+		*s = Status(i)
+		return nil
+	default:
+		return fmt.Errorf("attribute value is not a string or number")
+	}
+}
+
+// String returns the string representation of the Status
+func (s Status) String() string {
+	if str, ok := statusEnumToString[s]; ok {
+		return str
+	}
+	return fmt.Sprintf("UnknownStatus(%d)", s)
 }

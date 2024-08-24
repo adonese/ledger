@@ -58,6 +58,7 @@ func publishToSNSTopic(transaction ledger.EscrowTransaction) error {
 }
 
 func init() {
+	log.Println("the SQSProcessor is launched")
 
 	json.Unmarshal(secrets, &data)
 
@@ -77,6 +78,11 @@ func init() {
 }
 
 func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
+	// in the initial request we will have:
+	// - from account
+	// - to account
+	// - from tenat to tenat
+	log.Println("Hello, World! SQS is being loaded!")
 	_, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
@@ -86,10 +92,12 @@ func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
 		if record.EventName == "INSERT" {
 			dynamoRecord := record.Change.NewImage
 
+			log.Printf("the record is: %+v", dynamoRecord)
+
 			// Convert events.DynamoDBAttributeValue to dynamodb.AttributeValue
 			convertedRecord := make(map[string]types.AttributeValue)
 			for k, v := range dynamoRecord {
-				convertedRecord[k] = convertToSDKAttributeValue(v)
+				convertedRecord[k] = ledger.ConvertToSDKAttributeValue(v)
 			}
 
 			var transaction ledger.EscrowTransaction
@@ -99,46 +107,58 @@ func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
 				continue
 			}
 			log.Printf("the transaction entry is: %+v", transaction)
-			if transaction.Status == ledger.StatusCompleted {
+			if transaction.Status == ledger.StatusCompleted || transaction.Status == ledger.StatusFailed { // both are final states
 				continue
 			}
+			if transaction.CashoutProvider == "nil" { // this is guaranteed to be populated
 
-			var reversedTenant, reveresedAccount string // we use those to reverse the transaction
-			reversedTenant = transaction.FromTenantID
-			reveresedAccount = transaction.FromAccount
-
-			// This is what we get
-			// {SystemTransactionID:2hvsbAMI36eCWn1awIOQ6B9ExfP FromAccount:0111493885 ToAccount:NIL_ESCROW_ACCOUNT Amount:4 Comment: TransactionDate:1718485953
-			//  Status:Pending FromTenantID:nonil ToTenantID:ESCROW_TENANT InitiatorUUID:2hvsb5L4EPLyEfqtrmC8kEfwtJq Timestamp: SignedUUID:}
-
-			transaction.FromTenantID = ledger.ESCROW_TENANT
-			transaction.FromAccount = ledger.ESCROW_ACCOUNT
-			transaction.Status = ledger.StatusCompleted
-			if _, err := ledger.EscrowTransferCredits(context.TODO(), _dbSvc, transaction); err != nil {
-				log.Printf("the error in sending transaction is: %v", err)
-				transaction.Status = ledger.StatusFailed
-				// You should reverse operation here!
-				tr := ledger.EscrowTransaction{
-					FromAccount:   ledger.ESCROW_ACCOUNT,
-					ToAccount:     reveresedAccount,
-					FromTenantID:  ledger.ESCROW_TENANT,
-					ToTenantID:    reversedTenant,
-					Amount:        transaction.Amount,
-					InitiatorUUID: transaction.InitiatorUUID,
-				}
-				log.Printf("the reverse request is: %+v", tr)
-				if _, err := ledger.EscrowTransferCredits(context.TODO(), _dbSvc, tr); err != nil {
-					log.Printf("WE should fix this: %v", err)
+				esTransaction := ledger.EscrowTransaction{
+					FromAccount:         transaction.TransientAccount,
+					FromTenantID:        transaction.TransientTenant,
+					ToAccount:           transaction.ToAccount,
+					ToTenantID:          transaction.ToTenantID,
+					Amount:              transaction.Amount,
+					Comment:             "Cashout",
+					InitiatorUUID:       transaction.InitiatorUUID,
+					Timestamp:           transaction.Timestamp,
+					SystemTransactionID: transaction.SystemTransactionID,
+					CashoutProvider:     transaction.CashoutProvider,
+					TransientAccount:    transaction.TransientAccount,
+					TransientTenant:     transaction.TransientTenant,
 				}
 
-			}
-			// In handleRequest function, after updating the transaction
-			if err := publishToSNSTopic(transaction); err != nil {
-				log.Printf("failed to publish to SNS topic: %v", err)
-			}
+				esTransaction.Status = ledger.StatusCompleted
+				if _, err := ledger.EscrowTransferCredits(context.TODO(), _dbSvc, esTransaction); err != nil {
+					log.Printf("the error in sending transaction is: %v", err)
+					esTransaction.Status = ledger.StatusFailed
+					// You should reverse operation here!
+					reversedTrans := ledger.EscrowTransaction{
+						FromAccount:         transaction.TransientAccount,
+						FromTenantID:        transaction.TransientTenant,
+						ToAccount:           transaction.FromAccount,
+						ToTenantID:          transaction.FromTenantID,
+						Amount:              transaction.Amount,
+						InitiatorUUID:       transaction.InitiatorUUID,
+						SystemTransactionID: transaction.SystemTransactionID,
+					}
+					log.Printf("the reverse request is: %+v", reversedTrans)
+					if _, err := ledger.EscrowTransferCredits(context.TODO(), _dbSvc, reversedTrans); err != nil {
+						log.Printf("WE should fix this: %v", err)
+					}
 
-			// Now, i want to amend that table again to make the status as completed.
-			updateItem(context.TODO(), _dbSvc, transaction)
+				}
+				log.Printf("the request we're sending to sns is: %+v", esTransaction)
+				// In handleRequest function, after updating the transaction
+
+				if err := publishToSNSTopic(esTransaction); err != nil {
+					log.Printf("failed to publish to SNS topic: %v", err)
+				}
+
+				// Now, i want to amend that table again to make the status as completed.
+				updateItem(context.TODO(), _dbSvc, esTransaction)
+			} else {
+				log.Println("im unable to hit the cashout provider")
+			}
 
 		}
 	}
@@ -163,43 +183,6 @@ func updateItem(ctx context.Context, dbSvc *dynamodb.Client, transaction ledger.
 	_, err := dbSvc.UpdateItem(ctx, input)
 	if err != nil {
 		log.Printf("failed to update item in DynamoDB: %v", err)
-	}
-}
-
-func convertToSDKAttributeValue(av events.DynamoDBAttributeValue) types.AttributeValue {
-	switch av.DataType() {
-	case events.DataTypeString:
-		return &types.AttributeValueMemberS{Value: av.String()}
-	case events.DataTypeNumber:
-		return &types.AttributeValueMemberN{Value: av.Number()}
-	case events.DataTypeBinary:
-		return &types.AttributeValueMemberB{Value: av.Binary()}
-	case events.DataTypeStringSet:
-		return &types.AttributeValueMemberSS{Value: av.StringSet()}
-	case events.DataTypeNumberSet:
-		return &types.AttributeValueMemberNS{Value: av.NumberSet()}
-	case events.DataTypeBinarySet:
-		return &types.AttributeValueMemberBS{Value: av.BinarySet()}
-	case events.DataTypeMap:
-		m := av.Map()
-		mapAv := make(map[string]types.AttributeValue, len(m))
-		for k, v := range m {
-			mapAv[k] = convertToSDKAttributeValue(v)
-		}
-		return &types.AttributeValueMemberM{Value: mapAv}
-	case events.DataTypeList:
-		l := av.List()
-		listAv := make([]types.AttributeValue, len(l))
-		for i, v := range l {
-			listAv[i] = convertToSDKAttributeValue(v)
-		}
-		return &types.AttributeValueMemberL{Value: listAv}
-	case events.DataTypeBoolean:
-		return &types.AttributeValueMemberBOOL{Value: av.Boolean()}
-	case events.DataTypeNull:
-		return &types.AttributeValueMemberNULL{Value: av.IsNull()}
-	default:
-		return nil
 	}
 }
 

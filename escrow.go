@@ -16,50 +16,6 @@ import (
 	"github.com/segmentio/ksuid"
 )
 
-// Status represents the status of a transaction
-type Status int
-
-// Define possible statuses
-const (
-	StatusPending Status = iota
-	StatusCompleted
-	StatusFailed
-	StatusInProgress
-)
-
-// Map from string to Status
-var statusStringToEnum = map[string]Status{
-	"Pending":    StatusPending,
-	"Completed":  StatusCompleted,
-	"Failed":     StatusFailed,
-	"InProgress": StatusInProgress,
-}
-
-// Map from Status to string (optional, for marshalling)
-var statusEnumToString = map[Status]string{
-	StatusPending:    "Pending",
-	StatusCompleted:  "Completed",
-	StatusFailed:     "Failed",
-	StatusInProgress: "InProgress",
-}
-
-// UnmarshalDynamoDBAttributeValue implements custom unmarshalling for Status
-func (s *Status) UnmarshalDynamoDBAttributeValue(av types.AttributeValue) error {
-	// Assert that the attribute value is of type *types.AttributeValueMemberS
-	value, ok := av.(*types.AttributeValueMemberS)
-	if !ok {
-		return fmt.Errorf("attribute value is not a string")
-	}
-
-	status, ok := statusStringToEnum[value.Value]
-	if !ok {
-		return fmt.Errorf("unknown status: %s", value.Value)
-	}
-
-	*s = status
-	return nil
-}
-
 // Optional: Implement MarshalDynamoDBAttributeValue for consistency
 // func (s Status) MarshalDynamoDBAttributeValue() (types.AttributeValue, error) {
 // 	str, ok := statusEnumToString[s]
@@ -74,11 +30,6 @@ const EscrowTransactionsTable = "EscrowTransactions"
 const ESCROW_ACCOUNT = "NIL_ESCROW_ACCOUNT"
 const ESCROW_TENANT = "ESCROW_TENANT"
 
-// String returns the string representation of the Status
-func (s Status) String() string {
-	return [...]string{"Pending", "Completed", "Failed", "In Progress"}[s]
-}
-
 func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry EscrowEntry) (NilResponse, error) {
 	var response NilResponse
 
@@ -89,11 +40,11 @@ func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry Escr
 
 	es := EscrowTransaction{
 		FromAccount:   esEntry.FromAccount,
+		FromTenantID:  esEntry.FromTenantID,
 		ToAccount:     ESCROW_ACCOUNT, // We need to make sure that ESCROW_ACCOUNT is an exception
+		ToTenantID:    ESCROW_TENANT,
 		Amount:        esEntry.Amount,
 		InitiatorUUID: esEntry.InitiatorUUID,
-		FromTenantID:  esEntry.FromTenantID,
-		ToTenantID:    ESCROW_TENANT,
 	}
 
 	if _, err := EscrowTransferCredits(context, dbSvc, es); err != nil {
@@ -104,9 +55,13 @@ func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry Escr
 	es.SystemTransactionID = uid
 	es.TransactionDate = timestamp
 
-	// // HERE we are supposed to ensure that from and to are actually matches what we want
+	// HERE we are supposed to ensure that from and to are actually matches what we want
 	// Now, after you have done that, you should write these to Table
 	// What we need here is a fully fledged EscrowTransaction
+	cashOutProvider := "nil"
+	if esEntry.CashoutProvider != "" {
+		cashOutProvider = esEntry.CashoutProvider
+	}
 	esTransaction := EscrowTransaction{
 		FromAccount:         esEntry.FromAccount,
 		ToAccount:           esEntry.ToAccount,
@@ -118,20 +73,26 @@ func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry Escr
 		TransactionDate:     timestamp,
 		Timestamp:           getCurrentTimeZone(),
 		Status:              StatusInProgress,
+		Beneficiary:         esEntry.Beneficiary,
+		TransientAccount:    ESCROW_ACCOUNT,
+		TransientTenant:     ESCROW_TENANT,
+		CashoutProvider:     cashOutProvider,
 	}
 
 	item, err := attributevalue.MarshalMap(esTransaction)
 	if err != nil {
+		// reverse the transfer here if fails!
 		return NilResponse{}, fmt.Errorf("failed to marshal transaction: %w", err)
 	}
 
 	input := &dynamodb.PutItemInput{
-		TableName: aws.String(EscrowTransactionsTable),
+		TableName: aws.String(EscrowTransactionsTable), // save it in escrow transactions table
 		Item:      item,
 	}
 
 	if _, err := dbSvc.PutItem(context, input); err != nil {
 		spew.Dump(item)
+		// reverse the transfer here if fails!
 		return NilResponse{}, fmt.Errorf("failed to put item into DynamoDB: %w - the payload is: %+v", err, item)
 	}
 
@@ -163,7 +124,7 @@ func EscrowTransferCredits(context context.Context, dbSvc *dynamodb.Client, trEn
 		InitiatorUUID:       trEntry.InitiatorUUID,
 	}
 
-	// Fetch sender account
+	// Fetch sender account - sender here is the escrow account
 	sender, err := GetAccount(context, dbSvc, TransactionEntry{AccountID: trEntry.FromAccount, FromAccount: trEntry.FromAccount, TenantID: trEntry.FromTenantID})
 	if err != nil || sender == nil {
 		SaveToTransactionTable(dbSvc, combinedTenants, transaction, transactionStatus)
@@ -181,37 +142,40 @@ func EscrowTransferCredits(context context.Context, dbSvc *dynamodb.Client, trEn
 		return response, err
 	}
 
-	receiver, err := GetAccount(context, dbSvc, TransactionEntry{AccountID: trEntry.ToAccount, FromAccount: trEntry.ToAccount, TenantID: trEntry.ToTenantID})
-	if err != nil || receiver == nil {
-		SaveToTransactionTable(dbSvc, combinedTenants, transaction, transactionStatus)
-		response = NilResponse{
-			Status:    "error",
-			Code:      "user_not_found",
-			Message:   "Error in retrieving receiver.",
-			Details:   fmt.Sprintf("Error in retrieving receiver: %v", err),
-			Timestamp: trEntry.Timestamp,
-			Data: data{
-				UUID:       trEntry.InitiatorUUID,
-				SignedUUID: trEntry.SignedUUID,
-			},
+	// here it might be the case where by the output is for bankak or any other provider..
+	if trEntry.CashoutProvider == "bok" {
+		receiver, err := GetAccount(context, dbSvc, TransactionEntry{AccountID: trEntry.ToAccount, FromAccount: trEntry.ToAccount, TenantID: trEntry.ToTenantID})
+		if err != nil || receiver == nil {
+			SaveToTransactionTable(dbSvc, combinedTenants, transaction, transactionStatus)
+			response = NilResponse{
+				Status:    "error",
+				Code:      "user_not_found",
+				Message:   "Error in retrieving receiver.",
+				Details:   fmt.Sprintf("Error in retrieving receiver: %v", err),
+				Timestamp: trEntry.Timestamp,
+				Data: data{
+					UUID:       trEntry.InitiatorUUID,
+					SignedUUID: trEntry.SignedUUID,
+				},
+			}
+			return response, err
 		}
-		return response, err
-	}
 
-	if trEntry.Amount > sender.Amount {
-		SaveToTransactionTable(dbSvc, combinedTenants, transaction, transactionStatus)
-		response = NilResponse{
-			Status:    "error",
-			Code:      "insufficient_balance",
-			Message:   "Insufficient balance to complete the transaction.",
-			Details:   "The sender does not have enough balance in their account.",
-			Timestamp: trEntry.Timestamp,
-			Data: data{
-				UUID:       trEntry.InitiatorUUID,
-				SignedUUID: trEntry.SignedUUID,
-			},
+		if trEntry.Amount > sender.Amount {
+			SaveToTransactionTable(dbSvc, combinedTenants, transaction, transactionStatus)
+			response = NilResponse{
+				Status:    "error",
+				Code:      "insufficient_balance",
+				Message:   "Insufficient balance to complete the transaction.",
+				Details:   "The sender does not have enough balance in their account.",
+				Timestamp: trEntry.Timestamp,
+				Data: data{
+					UUID:       trEntry.InitiatorUUID,
+					SignedUUID: trEntry.SignedUUID,
+				},
+			}
+			return response, errors.New("insufficient balance")
 		}
-		return response, errors.New("insufficient balance")
 	}
 
 	debitEntry := LedgerEntry{
@@ -223,6 +187,7 @@ func EscrowTransferCredits(context context.Context, dbSvc *dynamodb.Client, trEn
 		Time:                timestamp,
 		InitiatorUUID:       trEntry.InitiatorUUID,
 	}
+	// FIXME(adonese): if the cashout provider is bok, then the receiver is the escrow account for nilbok
 	creditEntry := LedgerEntry{
 		TenantID:            trEntry.ToTenantID,
 		AccountID:           trEntry.ToAccount,
@@ -357,6 +322,17 @@ func EscrowTransferCredits(context context.Context, dbSvc *dynamodb.Client, trEn
 		panic(err)
 	}
 
+	// now finally here: if cashout.provider was bok, then we should make a table for nil that will include:
+	// - the transaction id
+	// - the amount
+	// - the currency
+	// - the uuid
+	// - the signed uuid
+	// - the timestamp
+	// - the actual to account
+	// - the status of the transaction (pending, completed, failed), it will be first pending because we have not made the transaction yet, and then it will be completed when the transaction is completed
+	// - the actual from account
+	// - also if if if it was nil or empty string, we should also update the same data, so we can avail those data to our integrated partners to enquire about
 	response = NilResponse{
 		Status:  "success",
 		Code:    "successful_transaction",
@@ -498,6 +474,25 @@ func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID
 	_, err := dbSvc.UpdateItem(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to update service provider: %w", err)
+	}
+
+	return nil
+}
+
+func ReverseEscrowTransferCredits(context context.Context, dbSvc *dynamodb.Client, es EscrowTransaction) error {
+	// Create a new EscrowTransaction with reversed From and To accounts
+	reversedEs := EscrowTransaction{
+		FromAccount:   ESCROW_ACCOUNT,
+		ToAccount:     es.FromAccount,
+		Amount:        es.Amount,
+		InitiatorUUID: es.InitiatorUUID,
+		FromTenantID:  ESCROW_TENANT,
+		ToTenantID:    es.FromTenantID,
+	}
+
+	// Call EscrowTransferCredits with the reversed transaction
+	if _, err := EscrowTransferCredits(context, dbSvc, reversedEs); err != nil {
+		return fmt.Errorf("failed to reverse escrow transfer: %w", err)
 	}
 
 	return nil

@@ -121,6 +121,7 @@ func init() {
 
 func main() {
 	log.Println("The sns is launched again")
+	log.Println("i'm the actual sns")
 
 	lambda.Start(handleSNSEvent)
 }
