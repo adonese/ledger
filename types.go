@@ -195,6 +195,7 @@ type EscrowTransaction struct {
 	Beneficiary         Beneficiary `dynamodbav:"Beneficiary" json:"beneficiary,omitempty"`
 	TransientAccount    string      `dynamodbav:"TransientAccount" json:"transient_account,omitempty"`
 	TransientTenant     string      `dynamodbav:"TransientTenant" json:"transient_tenant,omitempty"`
+	ServiceProvider     string      `dynamodbav:"ServiceProvider" json:"service_provider,omitempty"`
 }
 
 type EscrowMeta struct {
@@ -218,6 +219,7 @@ type EscrowEntry struct {
 	FromTenantID      string      `dynamodbav:"FromTenantID" json:"from_tenant_id,omitempty"`
 	CashoutProvider   string      `dynamodbav:"CashoutProvider" json:"cashout_provider"`
 	Beneficiary       Beneficiary `dynamodbav:"Beneficiary" json:"beneficiary"`
+	ServiceProvider   string      `dynamodbav:"ServiceProvider" json:"service_provider"`
 }
 
 type ServiceProvider struct {
@@ -227,6 +229,7 @@ type ServiceProvider struct {
 	LastAccessed string `dynamodbav:"LastAccessed" json:"last_accessed"`
 	Currency     string `dynamodbav:"Currency" json:"currency"`
 	PublicKey    string `dynamodbav:"PublicKey" json:"public_key"`
+	Email        string `dynamodbav:"Email" json:"email"`
 }
 
 // Status represents the status of a transaction
@@ -283,4 +286,18 @@ func (s Status) String() string {
 		return str
 	}
 	return fmt.Sprintf("UnknownStatus(%d)", s)
+}
+
+type QueryResultEscrowWebhookTable struct {
+	Transactions     []EscrowTransaction
+	LastEvaluatedKey map[string]types.AttributeValue
+	HasMorePages     bool
+}
+
+func parseISO8601(timestamp string) (int64, error) {
+	t, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return 0, err
+	}
+	return t.Unix(), nil
 }

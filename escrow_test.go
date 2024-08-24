@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -30,7 +31,8 @@ func TestEscrowRequest(t *testing.T) {
 		{"test nonil-nil", args{context.TODO(), _dbSvc, EscrowEntry{
 			CashoutProvider: "nil",
 			FromAccount:     "0111493885", ToAccount: "0965256869",
-			Amount: 3, ToTenantID: "nil", FromTenantID: "nonil", InitiatorUUID: "this is my static uuid YOLO!"},
+			ServiceProvider: "oss@pynil.com",
+			Amount:          3, ToTenantID: "nil", FromTenantID: "nonil", InitiatorUUID: "fff"},
 		},
 			NilResponse{}, false},
 	}
@@ -93,7 +95,7 @@ func TestGetServiceProvider(t *testing.T) {
 		want    *ServiceProvider
 		wantErr bool
 	}{
-		{"test nil tenant", args{context.TODO(), _dbSvc, "nil"}, nil, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, "oss@pynil.com"}, nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -121,7 +123,7 @@ func TestUpdateServiceProvider(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"test nil tenant", args{context.TODO(), _dbSvc, "nil", ServiceProvider{WebhookURL: "http://localhost:8080"}}, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, "oss@pynil.com", ServiceProvider{WebhookURL: "http://localhost:8080/not-found"}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,8 +146,8 @@ func TestCreateServiceProvider(t *testing.T) {
 		wantErr bool
 	}{
 		// create with public key
-		{"test nil tenant", args{context.TODO(), _dbSvc, ServiceProvider{TenantID: "11nil", WebhookURL: "http://localhost:8080"}}, false},
-		{"test nil tenant", args{context.TODO(), _dbSvc, ServiceProvider{TenantID: "nil", WebhookURL: "http://localhost:8089"}}, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, ServiceProvider{TenantID: "11nil", WebhookURL: "http://localhost:8080", Email: "oss@pynil.com"}}, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, ServiceProvider{TenantID: "nil", WebhookURL: "http://localhost:8089", Email: "oss@pynil.com"}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -211,4 +213,36 @@ func TestUnmarshalDynamoDBEvent(t *testing.T) {
 	assert.Equal(t, Beneficiary{}, transaction.Beneficiary)
 	assert.Equal(t, "NIL_ESCROW_ACCOUNT", transaction.TransientAccount)
 	assert.Equal(t, "ESCROW_TENANT", transaction.TransientTenant)
+}
+
+func TestQueryServiceProviderTransactions(t *testing.T) {
+	type args struct {
+		ctx              context.Context
+		svc              *dynamodb.Client
+		serviceProvider  string
+		startDate        time.Time
+		endDate          time.Time
+		pageSize         int32
+		lastEvaluatedKey map[string]types.AttributeValue
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *QueryResultEscrowWebhookTable
+		wantErr bool
+	}{
+		{"test nil tenant", args{context.TODO(), _dbSvc, "oss@pynil.com", time.Now().Add(-time.Hour), time.Now(), 10, nil}, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := QueryServiceProviderTransactions(tt.args.ctx, tt.args.svc, tt.args.serviceProvider, tt.args.startDate.Format(time.RFC3339), tt.args.endDate.Format(time.RFC3339), tt.args.pageSize, tt.args.lastEvaluatedKey)
+			if err != nil {
+				t.Errorf("QueryServiceProviderTransactions() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("QueryServiceProviderTransactions() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

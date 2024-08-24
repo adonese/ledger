@@ -11,10 +11,8 @@ import (
 	"github.com/adonese/ledger"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 var _dbSvc *dynamodb.Client
@@ -38,33 +36,6 @@ func handleSNSEvent(ctx context.Context, snsEvent events.SNSEvent) {
 	}
 }
 
-func getServiceProvider(ctx context.Context, client *dynamodb.Client, tenantID string) (*ledger.ServiceProvider, error) {
-	input := &dynamodb.GetItemInput{
-		TableName: aws.String("ServiceProviders"),
-		Key: map[string]types.AttributeValue{
-			"TenantID": &types.AttributeValueMemberS{Value: tenantID},
-		},
-	}
-
-	result, err := client.GetItem(ctx, input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get item: %w", err)
-	}
-
-	if result.Item == nil {
-		return nil, fmt.Errorf("no item found for tenant_id: %s", tenantID)
-	}
-
-	serviceProvider := &ledger.ServiceProvider{
-		TenantID:     tenantID,
-		WebhookURL:   result.Item["WebhookURL"].(*types.AttributeValueMemberS).Value,
-		TailscaleURL: result.Item["TailscaleURL"].(*types.AttributeValueMemberS).Value,
-		LastAccessed: result.Item["LastAccessed"].(*types.AttributeValueMemberS).Value,
-	}
-
-	return serviceProvider, nil
-}
-
 // 2024-08-10T12:40:43Z app[90801932cd7018] ams [info]{"level":"info","method":"POST","path":"/webhook","status":200,"client_ip":"3.231.203.116","latency":0.13541,
 // "request_body":{"transaction_id":"2kT3FZyVVUGn2j75pgzX4UA0lPL","from_account":"NIL_ESCROW_ACCOUNT","to_account":"0965256869","amount":4,"time":1723293636,"status":1,
 // "from_tenant_id":"ESCROW_TENANT","to_tenant_id":"nil","uuid":"2kT3Fdzmy3LDyj9zP081dIXp7fQ","timestamp":"2024-08-10T12:40:38Z"},"response_body":,"time":"2024-08-10T12:40:43Z",
@@ -78,7 +49,9 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 		return err
 	}
 
-	entry, err := getServiceProvider(context.TODO(), _dbSvc, transaction.FromTenantID)
+	log.Printf("the payload is: %v", transaction)
+
+	entry, err := ledger.GetServiceProvider(context.TODO(), _dbSvc, transaction.ServiceProvider)
 	if err != nil {
 		log.Printf("the error in lambda is: %v", err)
 	}
@@ -87,6 +60,9 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 		webhookURL = entry.WebhookURL
 	}
 
+	if err := ledger.StoreLocalWebhooks(context.TODO(), _dbSvc, transaction.ServiceProvider, transaction); err != nil {
+		return fmt.Errorf("failed to store webhook: %w", err)
+	}
 	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(payload))
 	if err != nil {
 		return err

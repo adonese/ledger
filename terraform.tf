@@ -594,6 +594,9 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
           "dynamodb:Scan",
           "dynamodb:Query",
           "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
           "dynamodb:BatchGetItem",
           "dynamodb:DescribeStream",
           "dynamodb:GetRecords",
@@ -604,7 +607,8 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
         Resource: [
           "${aws_dynamodb_table.escrow_transactions.arn}",
           "${aws_dynamodb_table.escrow_transactions.arn}/stream/*",
-          "${aws_dynamodb_table.service_providers.arn}" // read service_providers table
+          "${aws_dynamodb_table.service_providers.arn}",
+          "${aws_dynamodb_table.service_provider_transactions.arn}"
         ],
       },
       {
@@ -685,12 +689,12 @@ resource "aws_sns_topic_subscription" "sns_to_sqs" {
 
 # lambda to process sqs. we should use this instead of lambda from sns
 resource "aws_lambda_function" "sqs_processor" {
-  filename         = "sqs/bootstrap.zip"
+  filename         = "cli/bootstrap.zip"
   function_name    = "SQSProcessor"
   role             = aws_iam_role.sqs_lambda_exec_role.arn
   handler          = "bootstrap"
   runtime          = "provided.al2023"
-  source_code_hash = filebase64sha256("sqs/bootstrap.zip")
+  source_code_hash = filebase64sha256("cli/bootstrap.zip")
 }
 
 resource "aws_lambda_event_source_mapping" "sqs_lambda_mapping" {
@@ -718,12 +722,12 @@ resource "aws_sns_topic_subscription" "lambda_subscription" {
 }
 
 resource "aws_lambda_function" "webhook_notifier" {
-  filename         = "cli/bootstrap.zip"
+  filename         = "sns/bootstrap.zip"
   function_name    = "webhook_notifier"
   role             = aws_iam_role.lambda_exec_role.arn
   handler          = "bootstrap"
   runtime          = "provided.al2023"
-  source_code_hash = filebase64sha256("cli/bootstrap.zip")
+  source_code_hash = filebase64sha256("sns/bootstrap.zip")
 }
 
 
@@ -732,11 +736,46 @@ resource "aws_dynamodb_table" "service_providers" {
   billing_mode   = "PROVISIONED"
   read_capacity  = 7
   write_capacity = 7
-  hash_key       = "TenantID"
+  hash_key       = "Email"
 
   attribute {
-    name = "TenantID"
+    name = "Email"
     type = "S"
+  }
+}
+
+
+# Simplified DynamoDB table for service provider transactions
+resource "aws_dynamodb_table" "service_provider_transactions" {
+  name           = "ServiceProviderTransactions"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 7
+  write_capacity = 7
+  hash_key       = "ServiceProvider"
+  range_key      = "TransactionID"
+
+  attribute {
+    name = "ServiceProvider"
+    type = "S"
+  }
+
+  attribute {
+    name = "TransactionID"
+    type = "S"
+  }
+
+  attribute {
+    name = "TransactionDate"
+    type = "N"
+  }
+
+  global_secondary_index {
+    name               = "ServiceProviderDateIndex"
+    hash_key           = "ServiceProvider"
+    range_key          = "TransactionDate"
+    projection_type    = "ALL"
+    read_capacity      = 7
+    write_capacity     = 7
   }
 }
 

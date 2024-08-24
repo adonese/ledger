@@ -29,6 +29,7 @@ import (
 const EscrowTransactionsTable = "EscrowTransactions"
 const ESCROW_ACCOUNT = "NIL_ESCROW_ACCOUNT"
 const ESCROW_TENANT = "ESCROW_TENANT"
+const ServiceProvidersTransactions = "ServiceProviderTransactions"
 
 func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry EscrowEntry) (NilResponse, error) {
 	var response NilResponse
@@ -77,6 +78,7 @@ func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry Escr
 		TransientAccount:    ESCROW_ACCOUNT,
 		TransientTenant:     ESCROW_TENANT,
 		CashoutProvider:     cashOutProvider,
+		ServiceProvider:     esEntry.ServiceProvider,
 	}
 
 	item, err := attributevalue.MarshalMap(esTransaction)
@@ -380,6 +382,9 @@ func GetEscrowTransactions(ctx context.Context, dbSvc *dynamodb.Client, tenantID
 
 func CreateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, serviceProvider ServiceProvider) error {
 	// Marshal the ServiceProvider struct into a DynamoDB item
+	if serviceProvider.Email == "" {
+		return fmt.Errorf("email is required")
+	}
 	serviceProvider.LastAccessed = time.Now().Format(time.RFC3339)
 	item, err := attributevalue.MarshalMap(serviceProvider)
 	if err != nil {
@@ -390,7 +395,7 @@ func CreateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, serviceP
 	input := &dynamodb.PutItemInput{
 		TableName:           aws.String("ServiceProviders"),
 		Item:                item,
-		ConditionExpression: aws.String("attribute_not_exists(TenantID)"), // Ensure TenantID is unique
+		ConditionExpression: aws.String("attribute_not_exists(Email)"), // Ensure TenantID is unique
 	}
 
 	// Execute the PutItem operation
@@ -398,7 +403,7 @@ func CreateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, serviceP
 	if err != nil {
 		var conditionalCheckFailedErr *types.ConditionalCheckFailedException
 		if errors.As(err, &conditionalCheckFailedErr) {
-			return fmt.Errorf("service provider with TenantID %s already exists", serviceProvider.TenantID)
+			return fmt.Errorf("service provider with Email %s already exists", serviceProvider.TenantID)
 		}
 		return fmt.Errorf("failed to create service provider: %w", err)
 	}
@@ -406,11 +411,11 @@ func CreateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, serviceP
 	return nil
 }
 
-func GetServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID string) (*ServiceProvider, error) {
+func GetServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, email string) (*ServiceProvider, error) {
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String("ServiceProviders"),
 		Key: map[string]types.AttributeValue{
-			"TenantID": &types.AttributeValueMemberS{Value: tenantID},
+			"Email": &types.AttributeValueMemberS{Value: email},
 		},
 	}
 
@@ -420,7 +425,7 @@ func GetServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID st
 	}
 
 	if result.Item == nil {
-		return nil, fmt.Errorf("service provider with TenantID %s not found", tenantID)
+		return nil, fmt.Errorf("service provider with Email %s not found", email)
 	}
 
 	var serviceProvider ServiceProvider
@@ -431,7 +436,7 @@ func GetServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID st
 	return &serviceProvider, nil
 }
 
-func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID string, svcProvider ServiceProvider) error {
+func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, email string, svcProvider ServiceProvider) error {
 	// Initialize an empty update expression and attribute values map
 	updateExpression := "SET"
 	expressionAttributeValues := make(map[string]types.AttributeValue)
@@ -464,7 +469,7 @@ func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, tenantID
 	input := &dynamodb.UpdateItemInput{
 		TableName: aws.String("ServiceProviders"),
 		Key: map[string]types.AttributeValue{
-			"TenantID": &types.AttributeValueMemberS{Value: tenantID},
+			"Email": &types.AttributeValueMemberS{Value: email},
 		},
 		UpdateExpression:          aws.String(updateExpression),
 		ExpressionAttributeValues: expressionAttributeValues,
@@ -496,4 +501,97 @@ func ReverseEscrowTransferCredits(context context.Context, dbSvc *dynamodb.Clien
 	}
 
 	return nil
+}
+
+// StoreLocalWebhooks saves transactions in webhooks into a state so that it is retrievable later
+func StoreLocalWebhooks(ctx context.Context, dbSvc *dynamodb.Client, serviceProvider string, transaction EscrowTransaction) error {
+	item, err := attributevalue.MarshalMap(transaction)
+	if err != nil {
+		// reverse the transfer here if fails!
+		return fmt.Errorf("failed to marshal transaction: %w", err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		TableName: aws.String(ServiceProvidersTransactions), // save it in escrow transactions table
+		Item:      item,
+	}
+	if _, err := dbSvc.PutItem(ctx, input); err != nil {
+		return fmt.Errorf("failed to put item: %w", err)
+	}
+	return nil
+}
+
+func parseTimeInput(input string) (int64, error) {
+	// If input is empty, return current time
+	if input == "" {
+		return time.Now().Unix(), nil
+	}
+
+	// Try parsing as Unix timestamp
+	timestamp, err := strconv.ParseInt(input, 10, 64)
+	if err == nil {
+		return timestamp, nil
+	}
+
+	// If not a timestamp, try parsing as a date string
+	t, err := time.Parse(time.RFC3339, input)
+	if err == nil {
+		return t.Unix(), nil
+	}
+
+	// If all else fails, return an error
+	return 0, fmt.Errorf("unable to parse time input: %s", input)
+}
+
+func QueryServiceProviderTransactions(ctx context.Context, svc *dynamodb.Client, serviceProvider, startDateStr, endDateStr string, pageSize int32, lastEvaluatedKey map[string]types.AttributeValue) (*QueryResultEscrowWebhookTable, error) {
+	startTimestamp, err := parseTimeInput(startDateStr)
+	if err != nil {
+		log.Printf("Warning: invalid start date (%s), using 1 month ago as default", startDateStr)
+		startTimestamp = time.Now().AddDate(0, -1, 0).Unix()
+	}
+
+	endTimestamp, err := parseTimeInput(endDateStr)
+	if err != nil {
+		log.Printf("Warning: invalid end date (%s), using current time as default", endDateStr)
+		endTimestamp = time.Now().Unix()
+	}
+
+	// Ensure startTimestamp is before endTimestamp
+	if startTimestamp > endTimestamp {
+		startTimestamp, endTimestamp = endTimestamp, startTimestamp
+	}
+
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String("ServiceProviderTransactions"),
+		IndexName:              aws.String("ServiceProviderDateIndex"),
+		KeyConditionExpression: aws.String("#sp = :sp AND #td BETWEEN :start AND :end"),
+		ExpressionAttributeNames: map[string]string{
+			"#sp": "ServiceProvider",
+			"#td": "TransactionDate",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":sp":    &types.AttributeValueMemberS{Value: serviceProvider},
+			":start": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", startTimestamp)},
+			":end":   &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", endTimestamp)},
+		},
+		Limit:             aws.Int32(pageSize),
+		ExclusiveStartKey: lastEvaluatedKey,
+	}
+
+	result, err := svc.Query(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query DynamoDB: %v", err)
+	}
+
+	var transactions []EscrowTransaction
+	err = attributevalue.UnmarshalListOfMaps(result.Items, &transactions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal DynamoDB result: %v", err)
+	}
+
+	return &QueryResultEscrowWebhookTable{
+		Transactions:     transactions,
+		LastEvaluatedKey: result.LastEvaluatedKey,
+		HasMorePages:     len(result.LastEvaluatedKey) > 0,
+	}, nil
 }
