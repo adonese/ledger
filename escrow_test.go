@@ -253,3 +253,32 @@ func TestQueryServiceProviderTransactions(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEscrowTransactionByUUID(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		svc  *dynamodb.Client
+		uuid string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *EscrowTransaction
+		wantErr bool
+	}{
+		// get escrow transaction by uuid
+		{"test nil tenant", args{context.TODO(), _dbSvc, "fc1486cd-b245-4f34-81e7-c87c784a40f5"}, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetEscrowTransactionByUUID(tt.args.ctx, tt.args.svc, tt.args.uuid)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetEscrowTransactionByUUID() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetEscrowTransactionByUUID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

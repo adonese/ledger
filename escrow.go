@@ -602,3 +602,36 @@ func QueryServiceProviderTransactions(ctx context.Context, svc *dynamodb.Client,
 		HasMorePages:     len(result.LastEvaluatedKey) > 0,
 	}, nil
 }
+
+func GetEscrowTransactionByUUID(ctx context.Context, svc *dynamodb.Client, uuid string) ([]EscrowTransaction, error) {
+	// Prepare the query input
+	input := &dynamodb.QueryInput{
+		TableName: aws.String(EscrowTransactionsTable),
+
+		KeyConditions: map[string]types.Condition{
+			"UUID": {
+				ComparisonOperator: types.ComparisonOperatorEq,
+				AttributeValueList: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: uuid},
+				},
+			},
+		},
+	}
+
+	// Execute the query
+	result, err := svc.Query(context.TODO(), input)
+	if err != nil {
+		log.Fatalf("failed to query item, %v", err)
+		return nil, err
+	}
+
+	// Parse the result
+	var transactions []EscrowTransaction
+	err = attributevalue.UnmarshalListOfMaps(result.Items, &transactions)
+	if err != nil {
+		log.Fatalf("failed to unmarshal query result, %v", err)
+		return nil, err
+	}
+
+	return transactions, nil
+}
