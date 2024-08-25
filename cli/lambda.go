@@ -160,6 +160,7 @@ func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
 				updateItem(context.TODO(), _dbSvc, esTransaction)
 			} else {
 				log.Println("im unable to hit the cashout provider")
+				log.Printf("log for saving transaction is: %+v", ledger.StoreLocalWebhooks(context.TODO(), _dbSvc, transaction.ServiceProvider, transaction))
 			}
 
 		}
