@@ -190,6 +190,7 @@ func TestUnmarshalDynamoDBEvent(t *testing.T) {
 		}),
 		"TransientAccount": events.NewStringAttribute("NIL_ESCROW_ACCOUNT"),
 		"TransientTenant":  events.NewStringAttribute("ESCROW_TENANT"),
+		"PaymentReference": events.NewStringAttribute("1234567890"),
 	}
 
 	// Convert events.DynamoDBAttributeValue to types.AttributeValue
@@ -220,6 +221,7 @@ func TestUnmarshalDynamoDBEvent(t *testing.T) {
 	assert.Equal(t, Beneficiary{}, transaction.Beneficiary)
 	assert.Equal(t, "NIL_ESCROW_ACCOUNT", transaction.TransientAccount)
 	assert.Equal(t, "ESCROW_TENANT", transaction.TransientTenant)
+	assert.Equal(t, "1234567890", transaction.PaymentReference)
 }
 
 func TestQueryServiceProviderTransactions(t *testing.T) {
@@ -238,7 +240,7 @@ func TestQueryServiceProviderTransactions(t *testing.T) {
 		want    *QueryResultEscrowWebhookTable
 		wantErr bool
 	}{
-		{"test nil tenant", args{context.TODO(), _dbSvc, "oss@pynil.com", time.Now().Add(-time.Hour), time.Now(), 10, nil}, nil, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, "oss@pynil.com", time.Now().Add(-24 * 30 * 10 * time.Hour), time.Now(), 100, nil}, nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

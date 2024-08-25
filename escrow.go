@@ -40,12 +40,13 @@ func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry Escr
 	uid := ksuid.New().String()
 
 	es := EscrowTransaction{
-		FromAccount:   esEntry.FromAccount,
-		FromTenantID:  esEntry.FromTenantID,
-		ToAccount:     ESCROW_ACCOUNT, // We need to make sure that ESCROW_ACCOUNT is an exception
-		ToTenantID:    ESCROW_TENANT,
-		Amount:        esEntry.Amount,
-		InitiatorUUID: esEntry.InitiatorUUID,
+		FromAccount:      esEntry.FromAccount,
+		FromTenantID:     esEntry.FromTenantID,
+		ToAccount:        ESCROW_ACCOUNT, // We need to make sure that ESCROW_ACCOUNT is an exception
+		ToTenantID:       ESCROW_TENANT,
+		Amount:           esEntry.Amount,
+		InitiatorUUID:    esEntry.InitiatorUUID,
+		PaymentReference: esEntry.PaymentReference,
 	}
 
 	if _, err := EscrowTransferCredits(context, dbSvc, es); err != nil {
@@ -570,7 +571,7 @@ func QueryServiceProviderTransactions(ctx context.Context, svc *dynamodb.Client,
 	}
 
 	input := &dynamodb.QueryInput{
-		TableName:              aws.String("ServiceProviderTransactions"),
+		TableName:              aws.String(ServiceProvidersTransactions),
 		IndexName:              aws.String("ServiceProviderDateIndex"),
 		KeyConditionExpression: aws.String("#sp = :sp AND #td BETWEEN :start AND :end"),
 		ExpressionAttributeNames: map[string]string{
