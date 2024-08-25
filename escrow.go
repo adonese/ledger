@@ -385,6 +385,13 @@ func CreateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, serviceP
 	if serviceProvider.Email == "" {
 		return fmt.Errorf("email is required")
 	}
+	if serviceProvider.EscrowAccount == "" || serviceProvider.TenantID == "" {
+		return fmt.Errorf("tenantID and escrowAccount are required")
+	}
+	if serviceProvider.Currency == "" {
+		serviceProvider.Currency = "SDG"
+	}
+
 	serviceProvider.LastAccessed = time.Now().Format(time.RFC3339)
 	item, err := attributevalue.MarshalMap(serviceProvider)
 	if err != nil {

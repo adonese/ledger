@@ -223,13 +223,14 @@ type EscrowEntry struct {
 }
 
 type ServiceProvider struct {
-	TenantID     string `dynamodbav:"TenantID" json:"tenant_id"`
-	WebhookURL   string `dynamodbav:"WebhookURL" json:"webhook_url"`
-	TailscaleURL string `dynamodbav:"TailscaleURL" json:"tailscale_url"`
-	LastAccessed string `dynamodbav:"LastAccessed" json:"last_accessed"`
-	Currency     string `dynamodbav:"Currency" json:"currency"`
-	PublicKey    string `dynamodbav:"PublicKey" json:"public_key"`
-	Email        string `dynamodbav:"Email" json:"email"`
+	TenantID      string `dynamodbav:"TenantID" json:"tenant_id"`
+	WebhookURL    string `dynamodbav:"WebhookURL" json:"webhook_url"`
+	TailscaleURL  string `dynamodbav:"TailscaleURL" json:"tailscale_url"`
+	LastAccessed  string `dynamodbav:"LastAccessed" json:"last_accessed"`
+	Currency      string `dynamodbav:"Currency" json:"currency"`
+	PublicKey     string `dynamodbav:"PublicKey" json:"public_key"`
+	Email         string `dynamodbav:"Email" json:"email"`
+	EscrowAccount string `dynamodbav:"EscrowAccount" json:"escrow_account"`
 }
 
 // Status represents the status of a transaction
@@ -292,12 +293,4 @@ type QueryResultEscrowWebhookTable struct {
 	Transactions     []EscrowTransaction
 	LastEvaluatedKey map[string]types.AttributeValue
 	HasMorePages     bool
-}
-
-func parseISO8601(timestamp string) (int64, error) {
-	t, err := time.Parse(time.RFC3339, timestamp)
-	if err != nil {
-		return 0, err
-	}
-	return t.Unix(), nil
 }

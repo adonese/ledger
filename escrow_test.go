@@ -112,7 +112,7 @@ func TestGetServiceProvider(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetServiceProvider() = %v, want %v", got, tt.want)
+				t.Errorf("GetServiceProvider() = %+v, want %v", got, tt.want)
 			}
 		})
 	}
