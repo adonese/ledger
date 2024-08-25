@@ -635,3 +635,40 @@ func GetEscrowTransactionByUUID(ctx context.Context, svc *dynamodb.Client, uuid 
 
 	return transactions, nil
 }
+
+func IsDuplicateEscrowTransaction(ctx context.Context, svc *dynamodb.Client, uuid string) bool {
+	// Prepare the Query input
+	input := &dynamodb.QueryInput{
+		TableName: aws.String(EscrowTransactionsTable),
+		KeyConditions: map[string]types.Condition{
+			"UUID": {
+				ComparisonOperator: types.ComparisonOperatorEq,
+				AttributeValueList: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: uuid},
+				},
+			},
+		},
+		// Use an expression attribute name to avoid conflicts with reserved keywords
+		ProjectionExpression: aws.String("#uuid"),
+		ExpressionAttributeNames: map[string]string{
+			"#uuid": "UUID",
+		},
+		Limit: aws.Int32(1), // Only interested in checking existence
+	}
+
+	// Execute the Query request
+	result, err := svc.Query(ctx, input)
+	if err != nil {
+		log.Fatalf("failed to query item, %v", err)
+		return false
+	}
+
+	// Check if the item exists
+	if len(result.Items) == 0 {
+		fmt.Printf("Transaction with UUID %s does not exist, proceed with creating it.\n", uuid)
+		return false
+	} else {
+		fmt.Printf("Transaction with UUID %s already exists, check for duplication.\n", uuid)
+		return true
+	}
+}

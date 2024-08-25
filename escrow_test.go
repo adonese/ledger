@@ -282,3 +282,27 @@ func TestGetEscrowTransactionByUUID(t *testing.T) {
 		})
 	}
 }
+
+func TestIsDuplicateEscrowTransaction(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		svc  *dynamodb.Client
+		uuid string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"test nil tenant", args{context.TODO(), _dbSvc, "fc1486cd-b245-4f34-81e7-c87c784a40f5"}, true},
+		{"test nil tenant", args{context.TODO(), _dbSvc, "fff"}, true},
+		{"test nil tenant", args{context.TODO(), _dbSvc, "fff333"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsDuplicateEscrowTransaction(tt.args.ctx, tt.args.svc, tt.args.uuid); got != tt.want {
+				t.Errorf("IsDuplicateEscrowTransaction() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
