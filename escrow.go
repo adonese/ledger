@@ -79,6 +79,7 @@ func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry Escr
 		TransientTenant:     ESCROW_TENANT,
 		CashoutProvider:     cashOutProvider,
 		ServiceProvider:     esEntry.ServiceProvider,
+		PaymentReference:    esEntry.PaymentReference,
 	}
 
 	item, err := attributevalue.MarshalMap(esTransaction)

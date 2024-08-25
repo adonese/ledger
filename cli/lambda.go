@@ -118,7 +118,7 @@ func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
 					ToAccount:           transaction.ToAccount,
 					ToTenantID:          transaction.ToTenantID,
 					Amount:              transaction.Amount,
-					Comment:             "Cashout",
+					Comment:             transaction.Comment,
 					InitiatorUUID:       transaction.InitiatorUUID,
 					Timestamp:           transaction.Timestamp,
 					SystemTransactionID: transaction.SystemTransactionID,
@@ -127,6 +127,7 @@ func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
 					TransientTenant:     transaction.TransientTenant,
 					ServiceProvider:     transaction.ServiceProvider,
 					TransactionDate:     transaction.TransactionDate,
+					PaymentReference:    transaction.PaymentReference,
 				}
 
 				esTransaction.Status = ledger.StatusCompleted
