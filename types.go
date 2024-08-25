@@ -197,6 +197,7 @@ type EscrowTransaction struct {
 	TransientAccount    string      `dynamodbav:"TransientAccount" json:"transient_account,omitempty"`
 	TransientTenant     string      `dynamodbav:"TransientTenant" json:"transient_tenant,omitempty"`
 	ServiceProvider     string      `dynamodbav:"ServiceProvider" json:"service_provider,omitempty"`
+	PaymentReference    string      `dynamodbav:"PaymentReference" json:"payment_reference,omitempty"`
 }
 
 type EscrowMeta struct {
@@ -221,6 +222,7 @@ type EscrowEntry struct {
 	CashoutProvider   string      `dynamodbav:"CashoutProvider" json:"cashout_provider"`
 	Beneficiary       Beneficiary `dynamodbav:"Beneficiary" json:"beneficiary"`
 	ServiceProvider   string      `dynamodbav:"ServiceProvider" json:"service_provider"`
+	PaymentReference  string      `dynamodbav:"PaymentReference" json:"payment_reference"`
 }
 
 type ServiceProvider struct {
