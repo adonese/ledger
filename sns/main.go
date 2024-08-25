@@ -43,8 +43,11 @@ func handleSNSEvent(ctx context.Context, snsEvent events.SNSEvent) {
 func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 
 	webhookURL := "https://dapi.nil.sd/webhook"
+	log.Printf("the request as we've got it is: %+v", transaction)
 
-	payload, err := json.Marshal(transaction)
+	hookTransaction := NewEscrowTransactionWrapper(transaction)
+
+	payload, err := json.Marshal(hookTransaction)
 	if err != nil {
 		return err
 	}
@@ -60,6 +63,7 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 		webhookURL = entry.WebhookURL
 	}
 
+	webhookURL = "https://dapi.nil.sd/webhook" //FIXME temporarily just to log the transaction
 	if err := ledger.StoreLocalWebhooks(context.TODO(), _dbSvc, transaction.ServiceProvider, transaction); err != nil {
 		return fmt.Errorf("failed to store webhook: %w", err)
 	}

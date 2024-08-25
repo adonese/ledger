@@ -172,11 +172,12 @@ type data struct {
 }
 
 type Beneficiary struct {
-	AccountID string `dynamodbav:"AccountID" json:"account_id,omitempty"`
-	FullName  string `dynamodbav:"FullName" json:"full_name,omitempty"`
-	Mobile    string `dynamodbav:"Mobile" json:"mobile,omitempty"`
-	Provider  string `dynamodbav:"Provider" json:"provider,omitempty"`
-	Address   string `dynamodbav:"Address" json:"address,omitempty"`
+	AccountID  string `dynamodbav:"AccountID" json:"account_id,omitempty"`
+	FullName   string `dynamodbav:"FullName" json:"full_name,omitempty"`
+	Mobile     string `dynamodbav:"Mobile" json:"mobile,omitempty"`
+	Provider   string `dynamodbav:"Provider" json:"provider,omitempty"`
+	Address    string `dynamodbav:"Address" json:"address,omitempty"`
+	BranchName string `dynamodbav:"BranchName" json:"branch_name,omitempty"`
 }
 type EscrowTransaction struct {
 	SystemTransactionID string      `dynamodbav:"TransactionID" json:"transaction_id,omitempty"`
