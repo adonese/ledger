@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 
+	_ "embed"
+
 	"github.com/adonese/ledger"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -16,6 +18,9 @@ import (
 )
 
 var _dbSvc *dynamodb.Client
+
+//go:embed priv.pem
+var privKey []byte
 
 func handleSNSEvent(ctx context.Context, snsEvent events.SNSEvent) {
 	for _, record := range snsEvent.Records {
@@ -68,6 +73,11 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 		webhookURL = entry.WebhookURL
 	}
 
+	nilSignature, err := sign(hookTransaction.InitiatorUUID, privKey)
+	if err != nil {
+		log.Printf("we failed to sign the transaction: %v", err)
+	}
+
 	// webhookURL = "https://dapi.nil.sd/webhook" //FIXME temporarily just to log the transaction
 
 	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(payload))
@@ -75,6 +85,7 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Signature", nilSignature)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -92,6 +103,7 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 
 func init() {
 	log.Println("The sns is launched")
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
