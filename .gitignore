@@ -15,3 +15,4 @@ bootstrap*
 sns/sns
 sns/webhook_notifier*
 webhook_notifier*
+sns/priv.pem
