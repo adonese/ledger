@@ -17,7 +17,7 @@ type EscrowTransactionWrapper struct {
 	CashoutProvider  string             `json:"cashout_provider,omitempty"`
 	Beneficiary      ledger.Beneficiary `json:"beneficiary,omitempty"`
 	ServiceProvider  string             `json:"payment_reference,omitempty"`
-	PaymentReference string             `json:"service_provider_id,omitempty"`
+	PaymentReference string             `json:"service_provider_transaction_id,omitempty"`
 }
 
 func NewEscrowTransactionWrapper(tx ledger.EscrowTransaction) EscrowTransactionWrapper {
