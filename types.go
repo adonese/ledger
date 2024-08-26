@@ -226,14 +226,15 @@ type EscrowEntry struct {
 }
 
 type ServiceProvider struct {
-	TenantID      string `dynamodbav:"TenantID" json:"tenant_id"`
-	WebhookURL    string `dynamodbav:"WebhookURL" json:"webhook_url"`
-	TailscaleURL  string `dynamodbav:"TailscaleURL" json:"tailscale_url"`
-	LastAccessed  string `dynamodbav:"LastAccessed" json:"last_accessed"`
-	Currency      string `dynamodbav:"Currency" json:"currency"`
-	PublicKey     string `dynamodbav:"PublicKey" json:"public_key"`
-	Email         string `dynamodbav:"Email" json:"email"`
-	EscrowAccount string `dynamodbav:"EscrowAccount" json:"escrow_account"`
+	TenantID          string `dynamodbav:"TenantID" json:"tenant_id"`
+	WebhookURL        string `dynamodbav:"WebhookURL" json:"webhook_url"`
+	TailscaleURL      string `dynamodbav:"TailscaleURL" json:"tailscale_url"`
+	LastAccessed      string `dynamodbav:"LastAccessed" json:"last_accessed"`
+	Currency          string `dynamodbav:"Currency" json:"currency"`
+	PublicKey         string `dynamodbav:"PublicKey" json:"public_key"`
+	Email             string `dynamodbav:"Email" json:"email"`
+	EscrowAccount     string `dynamodbav:"EscrowAccount" json:"escrow_account"`
+	WebhookSigningKey string `dynamodbav:"WebhookSigningKey" json:"webhook_signing_key"`
 }
 
 // Status represents the status of a transaction

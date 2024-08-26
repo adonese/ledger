@@ -130,7 +130,7 @@ func TestUpdateServiceProvider(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"test nil tenant", args{context.TODO(), _dbSvc, "oss@pynil.com", ServiceProvider{WebhookURL: "http://localhost:8080/not-found"}}, false},
+		{"test nil tenant", args{context.TODO(), _dbSvc, "oss11@pynil.com", ServiceProvider{WebhookSigningKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6n9XrRSSZZM46mmsE3F0qVjnFgcGKySy+jaTuOX2QjNI8qysbyL/hoDqhYhmOoPPbwn18JO2Ochw+EXcbKnR9qAPIu8CEeUweo0LG+Cv5SL/WBI2kaWpDz3fMSzw+Hanf6hRqm7jsWR/RV5qPI73IdBJ3gfdUpv9Ta8uzk7HOwIuR30Ja7pLKleIf5HFt56uFx8dxAofv7I8cc0NFbhKa7A937/DyqQG7vE+CGlF2MZPdMw0HMfOCxFWGekVwlrwkmdxjgtaNYJrtxHmzHOwVcnT7/7kGZrZ5GxefuV6eMo2ed4y0/QF/wzyZuBCQATkL962xiELcGkjzIIbcb1YlQIDAQAB"}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

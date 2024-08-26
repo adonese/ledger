@@ -413,7 +413,7 @@ func CreateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, serviceP
 	if err != nil {
 		var conditionalCheckFailedErr *types.ConditionalCheckFailedException
 		if errors.As(err, &conditionalCheckFailedErr) {
-			return fmt.Errorf("service provider with Email %s already exists", serviceProvider.TenantID)
+			return fmt.Errorf("service provider with Email %s already exists", serviceProvider.Email)
 		}
 		return fmt.Errorf("failed to create service provider: %w", err)
 	}
@@ -455,6 +455,11 @@ func UpdateServiceProvider(ctx context.Context, dbSvc *dynamodb.Client, email st
 	if svcProvider.WebhookURL != "" {
 		updateExpression += " WebhookURL = :webhook_url,"
 		expressionAttributeValues[":webhook_url"] = &types.AttributeValueMemberS{Value: svcProvider.WebhookURL}
+	}
+
+	if svcProvider.WebhookSigningKey != "" {
+		updateExpression += " WebhookSigningKey = :signing_key,"
+		expressionAttributeValues[":signing_key"] = &types.AttributeValueMemberS{Value: svcProvider.WebhookSigningKey}
 	}
 
 	if svcProvider.TailscaleURL != "" {
