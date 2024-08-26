@@ -11,12 +11,13 @@ type EscrowTransactionWrapper struct {
 	TransactionDate     int64   `json:"time,omitempty"`
 	Status              string  `json:"status,omitempty"`
 
-	InitiatorUUID   string             `json:"uuid,omitempty"`
-	Timestamp       string             `json:"timestamp,omitempty"`
-	SignedUUID      string             `json:"signed_uuid,omitempty"`
-	CashoutProvider string             `json:"cashout_provider,omitempty"`
-	Beneficiary     ledger.Beneficiary `json:"beneficiary,omitempty"`
-	ServiceProvider string             `json:"service_provider,omitempty"`
+	InitiatorUUID    string             `json:"uuid,omitempty"`
+	Timestamp        string             `json:"timestamp,omitempty"`
+	SignedUUID       string             `json:"signed_uuid,omitempty"`
+	CashoutProvider  string             `json:"cashout_provider,omitempty"`
+	Beneficiary      ledger.Beneficiary `json:"beneficiary,omitempty"`
+	ServiceProvider  string             `json:"payment_reference,omitempty"`
+	PaymentReference string             `json:"service_provider_id,omitempty"`
 }
 
 func NewEscrowTransactionWrapper(tx ledger.EscrowTransaction) EscrowTransactionWrapper {
@@ -35,6 +36,7 @@ func NewEscrowTransactionWrapper(tx ledger.EscrowTransaction) EscrowTransactionW
 		CashoutProvider: tx.CashoutProvider,
 		Beneficiary:     tx.Beneficiary,
 
-		ServiceProvider: tx.ServiceProvider,
+		ServiceProvider:  tx.ServiceProvider,
+		PaymentReference: tx.PaymentReference,
 	}
 }

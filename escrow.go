@@ -32,6 +32,7 @@ const ESCROW_TENANT = "ESCROW_TENANT"
 const ServiceProvidersTransactions = "ServiceProviderTransactions"
 
 func EscrowRequest(context context.Context, dbSvc *dynamodb.Client, esEntry EscrowEntry) (NilResponse, error) {
+	log.Printf("the escrow request is %+v", esEntry)
 	var response NilResponse
 
 	timestamp := getCurrentTimestamp()

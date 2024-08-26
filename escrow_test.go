@@ -32,7 +32,7 @@ func TestEscrowRequest(t *testing.T) {
 			CashoutProvider: "nil",
 			FromAccount:     "0111493885", ToAccount: "0965256869",
 			ServiceProvider: "oss@pynil.com",
-			Amount:          1, ToTenantID: "nil", FromTenantID: "nonil", InitiatorUUID: "fff"},
+			Amount:          1, ToTenantID: "nil", FromTenantID: "nonil", InitiatorUUID: "fff", PaymentReference: "1234567890"},
 		},
 			NilResponse{}, false},
 		{"test nonil-nil", args{context.TODO(), _dbSvc, EscrowEntry{

@@ -42,6 +42,11 @@ func handleSNSEvent(ctx context.Context, snsEvent events.SNSEvent) {
 // "message":"request completed"}
 func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 
+	log.Printf("the transaction before newEscrowTransaction is: %+v", transaction)
+	if err := ledger.StoreLocalWebhooks(context.TODO(), _dbSvc, transaction.ServiceProvider, transaction); err != nil {
+		return fmt.Errorf("failed to store webhook: %w", err)
+	}
+
 	webhookURL := "https://dapi.nil.sd/webhook"
 	log.Printf("the request as we've got it is: %+v", transaction)
 
@@ -52,7 +57,7 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 		return err
 	}
 
-	log.Printf("the payload is: %v", transaction)
+	log.Printf("the transaction after conversion is: %+v", transaction)
 
 	entry, err := ledger.GetServiceProvider(context.TODO(), _dbSvc, transaction.ServiceProvider)
 	if err != nil {
@@ -63,10 +68,8 @@ func sendWebhookNotification(transaction ledger.EscrowTransaction) error {
 		webhookURL = entry.WebhookURL
 	}
 
-	webhookURL = "https://dapi.nil.sd/webhook" //FIXME temporarily just to log the transaction
-	if err := ledger.StoreLocalWebhooks(context.TODO(), _dbSvc, transaction.ServiceProvider, transaction); err != nil {
-		return fmt.Errorf("failed to store webhook: %w", err)
-	}
+	// webhookURL = "https://dapi.nil.sd/webhook" //FIXME temporarily just to log the transaction
+
 	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(payload))
 	if err != nil {
 		return err

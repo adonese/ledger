@@ -128,6 +128,7 @@ func handleRequest(ctx context.Context, event events.DynamoDBEvent) {
 					ServiceProvider:     transaction.ServiceProvider,
 					TransactionDate:     transaction.TransactionDate,
 					PaymentReference:    transaction.PaymentReference,
+					Beneficiary:         transaction.Beneficiary,
 				}
 
 				esTransaction.Status = ledger.StatusCompleted
