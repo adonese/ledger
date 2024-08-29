@@ -131,10 +131,11 @@ func Test_inquireBalance(t *testing.T) {
 	}{
 		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0111498888", tenantId: "nil", context: ctx}, 30, false},
 		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: "0123456789", tenantId: "nil", context: ctx}, 2636, false},
+		{"test-get-balance", args{dbSvc: _dbSvc, AccountID: ESCROW_ACCOUNT, tenantId: ESCROW_TENANT, context: ctx}, 2636, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := InquireBalance(tt.args.context, tt.args.dbSvc, "", tt.args.AccountID)
+			got, err := InquireBalance(tt.args.context, tt.args.dbSvc, tt.args.tenantId, tt.args.AccountID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("inquireBalance() error = %v, wantErr %v", err, tt.wantErr)
 				return
